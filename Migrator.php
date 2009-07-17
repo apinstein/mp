@@ -30,10 +30,8 @@ class MigratorVersionProviderFile implements MigratorVersionProvider
     public function getVersion($migrator)
     {
         $versionFile = $this->getVersionFilePath($migrator);
-        $versionFileDir = dirname($versionFile);
-        if (!file_exists($versionFileDir))
+        if (!file_exists($versionFile))
         {
-            mkdir($versionFileDir, 0777, true);
             $this->setVersion($migrator, Migrator::VERSION_ZERO);
         }
         return file_get_contents($this->getVersionFilePath($migrator));
@@ -54,6 +52,13 @@ class MigratorVersionProviderFile implements MigratorVersionProvider
  */
 abstract class Migration
 {
+    protected $migrator = NULL;
+
+    public function __construct($migrator)
+    {
+        $this->migrator = $migrator;
+    }
+
     /**
      * Description of the migration.
      *
@@ -67,7 +72,7 @@ abstract class Migration
      * @param object Migrator
      * @throws object Exception If any exception is thrown the migration will be reverted.
      */
-    abstract public function up($migrator);
+    abstract public function up();
 
     /**
      * Code to undo this migration.
@@ -75,21 +80,21 @@ abstract class Migration
      * @param object Migrator
      * @throws object Exception If any exception is thrown the migration will be reverted.
      */
-    abstract public function down($migrator);
+    abstract public function down();
 
     /**
      * Code to handle cleanup of a failed up() migration.
      *
      * @param object Migrator
      */
-    public function upRollback($migrator) {}
+    public function upRollback() {}
 
     /**
      * Code to handle cleanup of a failed down() migration.
      *
      * @param object Migrator
      */
-    public function downRollback($migrator) {}
+    public function downRollback() {}
 }
 
 /**
@@ -129,6 +134,7 @@ class Migrator
     const OPT_MIGRATIONS_DIR             = 'migrationsDir';
     const OPT_VERSION_PROVIDER           = 'versionProvider';
     const OPT_DELEGATE                   = 'delegate';
+    const OPT_PDO_DSN                    = 'dsn';
     const OPT_VERBOSE                    = 'verbose';
 
     const DIRECTION_UP                   = 'up';
@@ -148,6 +154,10 @@ class Migrator
      * @var object MigratorDelegate
      */
     protected $delegate;
+    /**
+     * @var object PDO A PDO connection.
+     */
+    protected $dbCon;
     /**
      * @var object MigratorDelegate
      */
@@ -169,6 +179,7 @@ class Migrator
                                 Migrator::OPT_MIGRATIONS_DIR        => './migrations',
                                 Migrator::OPT_VERSION_PROVIDER      => new MigratorVersionProviderFile($this),
                                 Migrator::OPT_DELEGATE              => NULL,
+                                Migrator::OPT_PDO_DSN               => NULL,
                                 Migrator::OPT_VERBOSE               => false,
                            ), $opts);
 
@@ -179,6 +190,11 @@ class Migrator
         if ($opts[Migrator::OPT_DELEGATE])
         {
             $this->setDelegate($opts[Migrator::OPT_DELEGATE]);
+        }
+        if ($opts[Migrator::OPT_PDO_DSN])
+        {
+            $this->dbCon = new PDO($opts[Migrator::OPT_PDO_DSN]);
+            $this->dbCon->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
         }
 
         // get info from delegate
@@ -228,6 +244,11 @@ class Migrator
     {
         if (!$this->verbose && $onlyIfVerbose) return;
         print $msg;
+    }
+
+    public function getDbCon()
+    {
+        return $this->dbCon;
     }
  
     public function setDelegate($d)
@@ -346,10 +367,10 @@ class Migrator
 <?php
 class Migration{$dts} extends Migration
 {
-    public function up(\$migrator)
+    public function up()
     {
     }
-    public function down(\$migrator)
+    public function down()
     {
     }
     public function description()
@@ -367,7 +388,7 @@ END;
     {
         require_once($this->getMigrationsDirectory() . "/" . $this->migrationsFiles[$migrationName]);
         $migrationClassName = "Migration{$migrationName}";
-        return new $migrationClassName;
+        return new $migrationClassName($this);
     }
 
     /**
@@ -396,10 +417,18 @@ END;
             );
         }
         $migration = $this->instantiateMigration($migrationName);
-        $this->logMessage("Running {$info['actionName']}: " . $migration->description() . "\n", false);
+        $this->logMessage("Running {$info['actionName']} to {$migrationName}: " . $migration->description() . "\n", false);
         try {
             $migration->$info['migrateF']($this);
-            $this->getVersionProvider()->setVersion($this, $migrationName);
+            if ($direction === Migrator::DIRECTION_UP)
+            {
+                $this->getVersionProvider()->setVersion($this, $migrationName);
+            }
+            else
+            {
+                $downgradedToVersion = $this->findNextMigration($migrationName, Migrator::DIRECTION_DOWN);
+                $this->getVersionProvider()->setVersion($this, $downgradedToVersion);
+            }
             return true;
         } catch (Exception $e) {
             $this->logMessage("Error during {$info['actionName']} migration {$migrationName}: {$e}\n");
@@ -459,7 +488,14 @@ END;
         try {
             $this->indexOfVersion($toVersion);
         } catch (MigrationUnknownVersionException $e) {
-            $this->logMessage("Cannot migrate to version {$toVersion} because it does not exist.\n");
+            if ($toVersion === Migrator::VERSION_ZERO)
+            {
+                $this->logMessage("If you want to migrate to version 0, run clean().\n");
+            }
+            else
+            {
+                $this->logMessage("Cannot migrate to version {$toVersion} because it does not exist.\n");
+            }
             return false;
         }
 
@@ -485,7 +521,7 @@ END;
             $nextMigration = $this->findNextMigration($currentVersion, $direction);
             if (!$nextMigration) break;
 
-            $ok = $this->runMigration($nextMigration, $direction);
+            $ok = $this->runMigration( ($direction === Migrator::DIRECTION_UP ? $nextMigration : $currentVersion), $direction);
             if (!$ok)
             {
                 break;
@@ -499,7 +535,7 @@ END;
         }
         else
         {
-            $this->logMessage("{$actionName} failed at {$currentVersion}. Current version is " . $this->getVersionProvider()->getVersion($this) . "\n");
+            $this->logMessage("{$actionName} failed at {$toVersion}.\nRolled back to " . $this->getVersionProvider()->getVersion($this) . ".\n");
             return false;
         }
     }

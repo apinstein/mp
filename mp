@@ -1,4 +1,4 @@
-#!/usr/bin/php
+#!/opt/local/bin/php
 <?php
 /* vim: set expandtab tabstop=4 shiftwidth=4 syntax=php: */
 require_once('Migrator.php');
@@ -19,6 +19,9 @@ $longopts[] = "command:";
 $shortopts .= "r"; // -r --clean => run clean() first
 $longopts[] = "clean";
 
+$shortopts .= "x:"; // -r --dsn <PDO DSN> => A PDO DSN
+$longopts[] = "dsn:";
+
 $shortopts .= "v";  // -v --verbose => verbose
 $longopts[] = "verbose";
 
@@ -35,6 +38,7 @@ migrate usage:
      migrate options:
         -t --target <TargetVersion>
         -r --clean Run clean first
+        -x --dsn <PDO DSN>
   -v --verbose Verbose messages
   -h --help Show this help
   -d --dir <MigrationDir>
@@ -60,6 +64,10 @@ if (isset($cliOpts['v']))
 if (isset($cliOpts['d']))
 {
     $opts[Migrator::OPT_MIGRATIONS_DIR] = $cliOpts['d'];
+}
+if (isset($cliOpts['x']))
+{
+    $opts[Migrator::OPT_PDO_DSN] = $cliOpts['x'];
 }
 
 $m = new Migrator($opts);
