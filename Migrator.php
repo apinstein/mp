@@ -277,26 +277,10 @@ class Migrator
 
     // ACTIONS
     /**
-     * Reset the application to "initial state" suitable for running migrations against.
+     * Create a migrate stub file.
      *
-     * @return object Migrator
+     * Creates a new migration file in the migrations directory with a basic template for writing a migration.
      */
-    public function clean()
-    {
-        $this->logMessage("Cleaning...\n");
-
-        // reset version number
-        $this->getVersionProvider()->setVersion($this, Migrator::VERSION_ZERO);
-
-        // call delegate's clean
-        if ($this->delegate && method_exists($this->delegate, 'clean'))
-        {
-            $this->delegate->clean();
-        }
-
-        return $this;
-    }
-
     public function createMigration()
     {
         $dts = date('Ymd_His');
@@ -320,18 +304,23 @@ END;
         file_put_contents($this->getMigrationsDirectory() . "/{$filename}", $tpl);
     }
 
+    private function instantiateMigration($migrationName)
+    {
+        require_once($this->getMigrationsDirectory() . "/" . $this->migrationsFiles[$migrationName]);
+        $migrationClassName = "Migration{$migrationName}";
+        return new $migrationClassName;
+    }
+
     /**
-     * Run the given migration.
+     * Run the given migration as an upgrade.
      *
      * @param string The migration version.
      * @return boolean TRUE if migration ran successfully, false otherwise.
      */
-    public function runMigration($migrationName)
+    public function runUpgrade($migrationName)
     {
-        require_once($this->getMigrationsDirectory() . "/" . $this->migrationsFiles[$migrationName]);
-        $migrationClassName = "Migration{$migrationName}";
-        $migration = new $migrationClassName;
-        $this->logMessage("Running migration: " . $migration->description() . "\n", true);
+        $migration = $this->instantiateMigration($migrationName);
+        $this->logMessage("Running upgrade: " . $migration->description() . "\n", false);
         try {
             $migration->up($this);
             $this->getVersionProvider()->setVersion($this, $migrationName);
@@ -351,7 +340,36 @@ END;
         return false;
     }
 
-    public function migrateToVersion($toVersion)
+    /**
+     * Run the given migration as a downgrade.
+     *
+     * @param string The migration version.
+     * @return boolean TRUE if migration ran successfully, false otherwise.
+     */
+    public function runDowngrade($migrationName)
+    {
+        $migration = $this->instantiateMigration($migrationName);
+        $this->logMessage("Running downgrade: " . $migration->description() . "\n", false);
+        try {
+            $migration->down($this);
+            $this->getVersionProvider()->setVersion($this, $migrationName);
+            return true;
+        } catch (Exception $e) {
+            $this->logMessage("Error during migration {$migrationName}: {$e}\n");
+            if (method_exists($migration, 'downRollback'))
+            {
+                try {
+                    $migration->downRollback($this);
+                } catch (Exception $e) {
+                    $this->logMessage("Error during rollback of migration {$migrationName}: {$e}\n");
+                }
+
+            }
+        }
+        return false;
+    }
+
+    public function upgradeToVersion($toVersion)
     {
         $currentVersion = $this->getVersionProvider()->getVersion($this);
         if ($currentVersion === $toVersion)
@@ -360,12 +378,12 @@ END;
             return;
         }
 
-        $this->logMessage("Migrating from version {$currentVersion} to {$toVersion}.\n");
+        $this->logMessage("Updgrading from version {$currentVersion} to {$toVersion}.\n");
         while (true) {
             $nextMigration = $this->findNextMigration($currentVersion);
             if (!$nextMigration) break;
 
-            $ok = $this->runMigration($nextMigration);
+            $ok = $this->runUpgrade($nextMigration);
             if (!$ok)
             {
                 break;
@@ -374,25 +392,52 @@ END;
         }
         if ($currentVersion === $toVersion)
         {
-            $this->logMessage("Migration to {$toVersion} succeeded.\n");
+            $this->logMessage("Upgrade to {$toVersion} succeeded.\n");
         }
         else
         {
-            $this->logMessage("Migration failed at {$currentVersion}. Current version is " . $this->getVersionProvider()->getVersion($this) . "\n");
+            $this->logMessage("Upgrade failed at {$currentVersion}. Current version is " . $this->getVersionProvider()->getVersion($this) . "\n");
         }
     }
 
-    public function migrateToLatest()
+    /**
+     * Reset the application to "initial state" suitable for running migrations against.
+     *
+     * @return object Migrator
+     * @see Migrator::upgradeToLatest()
+     */
+    public function clean()
+    {
+        $this->logMessage("Cleaning...\n");
+
+        // reset version number
+        $this->getVersionProvider()->setVersion($this, Migrator::VERSION_ZERO);
+
+        // call delegate's clean
+        if ($this->delegate && method_exists($this->delegate, 'clean'))
+        {
+            $this->delegate->clean();
+        }
+
+        return $this;
+    }
+
+    /**
+     * Upgrade to the latest version of the application.
+     *
+     * @see Migrator::clean()
+     */
+    public function upgradeToLatest()
     {
         if (empty($this->migrationsFiles)) return;
         $lastMigration = array_pop(array_keys($this->migrationsFiles));
-        $this->migrateToVersion($lastMigration);
+        $this->upgradeToVersion($lastMigration);
     }
 }
 
 $m = new Migrator(array('verbose' => false));
-//$m->clean();
-$m->migrateToLatest();
+$m->clean();
+$m->upgradeToLatest();
 print "\n";
 
 
