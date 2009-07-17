@@ -14,6 +14,9 @@ which allows you to programmatically return your application to a pristine state
 Each migration for your application is defined by a class in the migrations directory.
 
 EXAMPLE CLI USAGE
+$ mp                            # Upgrade to latest revision
+$ mp -r                         # Reset to "clean" state then upgrade to latest revision
+$ mp -t 20090716_204830         # Migrate directly to revision 20090716_204830
 
 EXAMPLE API USAGE
 $m = new Migrator();
