@@ -11,10 +11,20 @@ MP keeps track of the current version of your application. You can then request 
 MP also has a "clean" function which allows you to reset your application to "version 0". There is a clean() callback
 which allows you to programmatically return your application to a pristine state when migrating with the "clean" option.
 
+By default you can implement your "clean" functionality in the MigrationClean::clean() method of migrations/clean.php:
+
+public function clean($migrator)
+{
+    $migrator->getDbCon()->exec("drop database foo; create database foo;");`
+}
+
 Each migration for your application is defined by a class in the migrations directory.
 
 EXAMPLE CLI USAGE
 $ mp                            # Upgrade to latest revision
+                                # First run of MP will create your migrations directory,
+                                # create a stub clean script, and set the version to 0.
+$ mp -c create                  # create a new migration file
 $ mp -r                         # Reset to "clean" state then upgrade to latest revision
 $ mp -t 20090716_204830         # Migrate directly to revision 20090716_204830
 

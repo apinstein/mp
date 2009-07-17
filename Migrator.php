@@ -125,8 +125,10 @@ abstract class MigratorDelegate
      * "Clean" is called if the migrator has been requested to set up a clean environment before migrating.
      *
      * This is typically used to rebuild the app state from the ground-up.
+     *
+     * @param object Migrator
      */
-    public function clean() {}
+    public function clean($migrator) {}
 }
 
 class Migrator
@@ -215,6 +217,18 @@ class Migrator
         if (!file_exists($migrationsDir))
         {
             mkdir($migrationsDir, 0777, true);
+            $cleanTPL = <<<END
+<?php
+
+class MigrateClean
+{
+    public function clean($migrator)
+    {
+        // hard-reset your app to a clean slate
+    }
+}
+END;
+            file_put_contents($migrationsDir . '/clean.php', $cleanTPL);
         }
 
         // initialize migration state
@@ -583,7 +597,17 @@ END;
         // call delegate's clean
         if ($this->delegate && method_exists($this->delegate, 'clean'))
         {
-            $this->delegate->clean();
+            $this->delegate->clean($this);
+        }
+        else
+        {
+            // look for migrations/clean.php, className = MigrateClean::clean()
+            $cleanFile = $this->getMigrationsDirectory() . '/clean.php';
+            if (file_exists($cleanFile))
+            {
+                require_once($cleanFile);
+                MigrateClean::clean($this);
+            }
         }
 
         return $this;
