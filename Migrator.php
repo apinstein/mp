@@ -96,6 +96,7 @@ abstract class Migration
  * Exception that should be thrown by a {@link object Migration Migration's} down() method if the migration is irreversible (ie a one-way migration).
  */
 class MigrationOneWayException extends Exception {}
+class MigrationUnknownVersionException extends Exception {}
 
 abstract class MigratorDelegate
 {
@@ -193,6 +194,13 @@ class Migrator
             }
         }
 
+        // initialize migrations dir
+        $migrationsDir = $this->getMigrationsDirectory();
+        if (!file_exists($migrationsDir))
+        {
+            mkdir($migrationsDir, 0777, true);
+        }
+
         // initialize migration state
         $this->logMessage("MP - The PHP Migrator.\n");
 
@@ -270,7 +278,7 @@ class Migrator
         }
         if (!$foundCurrent)
         {
-            throw new Exception("Version {$findVersion} is not a known migration.");
+            throw new MigrationUnknownVersionException("Version {$findVersion} is not a known migration.");
         }
         return $currentIndex;
     }
@@ -464,6 +472,14 @@ END;
                 $this->logMessage("Version {$currentVersion} is already below {$toVersion}.\n");
                 return;
             }
+        }
+
+        // verify target version
+        try {
+            $this->indexOfVersion($toVersion);
+        } catch (MigrationUnknownVersionException $e) {
+            $this->logMessage("Cannot " . ($direction === Migrator::DIRECTION_UP ? 'upgrade' : 'downgrade') . " to version {$toVersion} because it does not exist.\n");
+            return;
         }
 
         $actionName = ($direction === Migrator::DIRECTION_UP ? 'Upgrading' : 'Downgrading');
