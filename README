@@ -1,0 +1,39 @@
+MP: Migrations for PHP
+MP keeps your migrations in order.
+
+MP is a generic migrations architecture for managing migrations between versions of a web application.
+
+It can be used to migration database schemas as well as perform arbitary code during upgrades and downgrades.
+
+HOW IT WORKS
+MP keeps track of the current version of your application. You can then request to migrate to any version.
+
+MP also has a "clean" function which allows you to reset your application to "version 0". There is a clean() callback
+which allows you to programmatically return your application to a pristine state when migrating with the "clean" option.
+
+Each migration for your application is defined by a class in the migrations directory.
+
+EXAMPLE CLI USAGE
+
+EXAMPLE API USAGE
+$m = new Migrator();
+$m->clean();
+$m->upgradeToLatest();
+$m->downgradeToVersion('20090716_204830');
+$m->upgradeToVersion('20090716_205029');
+$m->downgradeToVersion('20090716_212141');
+
+INTEGRATION
+While MP can be operated purely via the migrate command line tool, it is also designed to be implemented into your
+web application or with any framework. You can use the Migrator API to custom-configure MP's behavior for your
+application or framework.
+
+This is ideal for use with ORMs that may already have an API to manage schemas but don't have a migrations system.
+It also works well with ORMs that don't have an API to manage schemas, as you can still integrate with them to use
+their DB connection for executing SQL migrations.
+
+ROADMAP / TODO
+- Addition of a generic schema manipulation API so you can use MP to manage your database without having to write SQL.
+- Addition of a MigratorVersionProvider that stores the version in a database rather than on the filesystem.
+- Addition of mutex protection to prevent multiple migrations from running at the same time.
+

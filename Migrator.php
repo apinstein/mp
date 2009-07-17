@@ -1,7 +1,7 @@
 <?php
 /* vim: set expandtab tabstop=4 shiftwidth=4: */
 /**
- * @package WebApplication
+ * @package Migrator
  * @copyright Copyright (c) 2005 Alan Pinstein. All Rights Reserved.
  * @license BSD
  * @author Alan Pinstein <apinstein@mac.com>                        
@@ -436,17 +436,7 @@ END;
         return $this->runMigration($migrationName, Migrator::DIRECTION_DOWN);
     }
 
-    public function upgradeToVersion($toVersion)
-    {
-        $this->migrateToVersion($toVersion, Migrator::DIRECTION_UP);
-    }
-
-    public function downgradeToVersion($toVersion)
-    {
-        $this->migrateToVersion($toVersion, Migrator::DIRECTION_DOWN);
-    }
-
-    public function migrateToVersion($toVersion, $direction)
+    public function migrateToVersion($toVersion)
     {
         $this->logMessage("\n");
 
@@ -457,29 +447,28 @@ END;
             return;
         }
 
-        // make sure toVersion is in direction of currentVersion
-        if ($currentVersion !== Migrator::VERSION_ZERO)
-        {
-            $currentVersionIndex = $this->indexOfVersion($currentVersion);
-            $toVersionIndex = $this->indexOfVersion($toVersion);
-            if ($direction === Migrator::DIRECTION_UP && $currentVersionIndex > $toVersionIndex)
-            {
-                $this->logMessage("Version {$currentVersion} is already newer than {$toVersion}.\n");
-                return;
-            }
-            else if ($direction === Migrator::DIRECTION_DOWN && $currentVersionIndex < $toVersionIndex)
-            {
-                $this->logMessage("Version {$currentVersion} is already below {$toVersion}.\n");
-                return;
-            }
-        }
-
         // verify target version
         try {
             $this->indexOfVersion($toVersion);
         } catch (MigrationUnknownVersionException $e) {
-            $this->logMessage("Cannot " . ($direction === Migrator::DIRECTION_UP ? 'upgrade' : 'downgrade') . " to version {$toVersion} because it does not exist.\n");
+            $this->logMessage("Cannot migrate to version {$toVersion} because it does not exist.\n");
             return;
+        }
+
+        // calculate direction
+        if ($currentVersion === Migrator::VERSION_ZERO)
+        {
+            $direction = Migrator::DIRECTION_UP;
+        }
+        else if ($currentVersion === array_pop(array_keys($this->migrationsFiles)))
+        {
+            $direction = Migrator::DIRECTION_DOWN;
+        }
+        else
+        {
+            $currentVersionIndex = $this->indexOfVersion($currentVersion);
+            $toVersionIndex = $this->indexOfVersion($toVersion);
+            $direction = ($toVersionIndex > $currentVersionIndex ? Migrator::DIRECTION_UP : Migrator::DIRECTION_DOWN);
         }
 
         $actionName = ($direction === Migrator::DIRECTION_UP ? 'Upgrading' : 'Downgrading');
@@ -536,16 +525,6 @@ END;
     {
         if (empty($this->migrationsFiles)) return;
         $lastMigration = array_pop(array_keys($this->migrationsFiles));
-        $this->upgradeToVersion($lastMigration);
+        $this->migrateToVersion($lastMigration, Migrator::DIRECTION_UP);
     }
 }
-
-$m = new Migrator(array('verbose' => false));
-$m->clean();
-$m->upgradeToLatest();
-$m->downgradeToVersion('20090716_204830');
-$m->upgradeToVersion('20090716_205029');
-$m->downgradeToVersion('20090716_212141');
-print "\n";
-
-
