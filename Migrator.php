@@ -7,13 +7,21 @@
  * @author Alan Pinstein <apinstein@mac.com>                        
  */
 
+/**
+ * An inteface describing methods used by Migrator to get/set the version of the app.
+ *
+ * This decoupling allows different applications to decide where they want to store their app's version information; in a file, DB, or wherever they want.
+ */
 interface MigratorVersionProvider
 {
     public function setVersion($migrator, $v);
     public function getVersion($migrator);
 }
 
-class MigratorVersionProvider_File implements MigratorVersionProvider
+/**
+ * A MigratorVersionProvider that stores the current version in migrationsDir/versions.txt.
+ */
+class MigratorVersionProviderFile implements MigratorVersionProvider
 {
     public function setVersion($migrator, $v)
     {
@@ -36,6 +44,58 @@ class MigratorVersionProvider_File implements MigratorVersionProvider
         return $migrator->getMigrationsDirectory() . '/version.txt';
     }
 }
+
+/**
+ * Abstract base class for a migration.
+ *
+ * Each MP "migration" is implemented by calling functions in the corresponding concrete Migration subclass.
+ *
+ * Subclasses must implement at least the up() and down() methods.
+ */
+abstract class Migration
+{
+    /**
+     * Description of the migration.
+     *
+     * @return string
+     */
+    public function description() { return NULL; }
+
+    /**
+     * Code to migration *to* this migration.
+     *
+     * @param object Migrator
+     * @throws object Exception If any exception is thrown the migration will be reverted.
+     */
+    abstract public function up($migrator);
+
+    /**
+     * Code to undo this migration.
+     *
+     * @param object Migrator
+     * @throws object Exception If any exception is thrown the migration will be reverted.
+     */
+    abstract public function down($migrator);
+
+    /**
+     * Code to handle cleanup of a failed up() migration.
+     *
+     * @param object Migrator
+     */
+    public function upRollback($migrator) {}
+
+    /**
+     * Code to handle cleanup of a failed down() migration.
+     *
+     * @param object Migrator
+     */
+    public function downRollback($migrator) {}
+}
+
+/**
+ * Exception that should be thrown by a {@link object Migration Migration's} down() method if the migration is irreversible (ie a one-way migration).
+ */
+class MigrationOneWayException extends Exception {}
 
 abstract class MigratorDelegate
 {
@@ -75,13 +135,6 @@ class Migrator
 
     const VERSION_ZERO                   = '0';
 
-    protected $direction = NULL;
-    protected $fromVersion = NULL;
-    protected $toVersion = NULL;
-    protected $currentVersion = NULL;
-
-    protected $migrationsFiles = array();
-
     /**
      * @var string The path to the directory where migrations are stored.
      */
@@ -98,6 +151,14 @@ class Migrator
      * @var object MigratorDelegate
      */
     protected $verbose;
+    /**
+     * @var string The version of the app at the beginning of the migrator run.
+     */
+    protected $initialVersion = NULL;
+    /**
+     * @var array An array of all migrations installed for this app.
+     */
+    protected $migrationsFiles = array();
 
     /**
      * Create a migrator instance.
@@ -109,7 +170,7 @@ class Migrator
     {
         $opts = array_merge(array(
                                 Migrator::OPT_MIGRATIONS_DIR        => './migrations',
-                                Migrator::OPT_VERSION_PROVIDER      => new MigratorVersionProvider_File($this),
+                                Migrator::OPT_VERSION_PROVIDER      => new MigratorVersionProviderFile($this),
                                 Migrator::OPT_DELEGATE              => NULL,
                                 Migrator::OPT_VERBOSE               => false,
                            ), $opts);
@@ -137,8 +198,8 @@ class Migrator
         }
 
         // initialize migration state
-        $this->fromVersion = $this->getVersionProvider()->getVersion($this);
-        $this->logMessage("MP - The PHP Migrator.\nCurrent Version: {$this->fromVersion}\n");
+        $this->initialVersion = $this->getVersionProvider()->getVersion($this);
+        $this->logMessage("MP - The PHP Migrator.\nCurrent Version: {$this->initialVersion}\n");
 
         $this->collectionMigrationsFiles();
     }
@@ -149,13 +210,13 @@ class Migrator
         foreach (new DirectoryIterator($this->getMigrationsDirectory()) as $file) {
             if ($file->isDot()) continue;
             if ($file->isDir()) continue;
-            if (preg_match('/^[0-9]{8}-[0-9]{6}.php$/', $file->getFilename()))
+            $matches = array();
+            if (preg_match('/^([0-9]{8}_[0-9]{6}).php$/', $file->getFilename(), $matches))
             {
-                $this->migrationsFiles[] = $file->getFilename();
+                $this->migrationsFiles[$matches[1]] = $file->getFilename();
             }
             // sort in reverse chronological order
             natsort($this->migrationsFiles);
-            $this->migrationsFiles = array_reverse($this->migrationsFiles);
         }
         $this->logMessage("Found " . count($this->migrationsFiles) . " migrations.\n");
     }
@@ -199,6 +260,26 @@ class Migrator
         return $this->versionProvider;
     }
 
+    public function findNextMigration($currentMigration)
+    {
+        $next = NULL;
+        $reachedCurrent = false;
+        foreach ($this->migrationsFiles as $migrationName => $migrationFile) {
+            if (!$reachedCurrent)
+            {
+                if ($migrationName === $currentMigration)
+                {
+                    $reachedCurrent = true;
+                    continue;
+                }
+                continue;
+            }
+            $next = $migrationName;
+            break;
+        }
+        return $next;
+    }
+
     // ACTIONS
     /**
      * Reset the application to "initial state" suitable for running migrations against.
@@ -227,13 +308,17 @@ class Migrator
         $filename = $dts . '.php';
         $tpl = <<<END
 <?php
-class {$dts}_Migration extends Migration
+class Migration{$dts} extends Migration
 {
     public function up(\$migrator)
     {
     }
     public function down(\$migrator)
     {
+    }
+    public function description()
+    {
+        return "Migration created at {$dts}.";
     }
 }
 END;
