@@ -28,7 +28,7 @@ $longopts[] = "verbose";
 $shortopts .= "h";  // -h --help => print help
 $longopts[] = "help";
 
-$cliOpts = getopt($shortopts, $longopts);
+$cliOpts = @getopt($shortopts, $longopts);
 
 if (isset($cliOpts['h']))
 {
