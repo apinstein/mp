@@ -298,7 +298,6 @@ class Migrator
         {
             throw new Exception("Current version {$currentMigration} is not a known migration.");
         }
-        //$this->logMessage("Index of current migration {$currentMigration} is {$currentIndex}.\n", true);
 
         if ($direction === Migrator::DIRECTION_UP)
         {
