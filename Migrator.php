@@ -201,7 +201,7 @@ class Migrator
 
     protected function collectionMigrationsFiles()
     {
-        $this->logMessage("Looking for migrations... ", true);
+        $this->logMessage("Looking for migrations...\n", true);
         foreach (new DirectoryIterator($this->getMigrationsDirectory()) as $file) {
             if ($file->isDot()) continue;
             if ($file->isDir()) continue;
@@ -213,7 +213,7 @@ class Migrator
             // sort in reverse chronological order
             natsort($this->migrationsFiles);
         }
-        $this->logMessage("Found " . count($this->migrationsFiles) . " migrations.\n", true);
+        $this->logMessage("Found " . count($this->migrationsFiles) . " migrations:" . print_r($this->migrationsFiles, true), true);
     }
 
     public function logMessage($msg, $onlyIfVerbose = false)
@@ -255,24 +255,68 @@ class Migrator
         return $this->versionProvider;
     }
 
-    protected function findNextMigration($currentMigration)
+    /**
+     * Find the next migration to run in the given direction.
+     *
+     * @param string Current version
+     * @param string Direction (one of Migrator::DIRECTION_UP or Migrator::DIRECTION_DOWN).
+     * @return string The migration name of the "next" migration in the correct direction, or NULL if there is no "next" migration in that direction.
+     * @throws
+     */
+    protected function findNextMigration($currentMigration, $direction)
     {
-        $next = NULL;
-        $reachedCurrent = ($currentMigration === Migrator::VERSION_ZERO);
-        foreach ($this->migrationsFiles as $migrationName => $migrationFile) {
-            if (!$reachedCurrent)
+        // special case when no migrations exist
+        if (count($this->migrationsFiles) === 0) return NULL;
+
+        $migrationVersions = array_keys($this->migrationsFiles);
+
+        // special case when current == VERSION_ZERO
+        if ($currentMigration === Migrator::VERSION_ZERO)
+        {
+            if ($direction === Migrator::DIRECTION_UP)
             {
-                if ($migrationName === $currentMigration)
-                {
-                    $reachedCurrent = true;
-                    continue;
-                }
-                continue;
+                return $migrationVersions[0];
             }
-            $next = $migrationName;
-            break;
+            else
+            {
+                return NULL;    // no where down from VERSION_ZERO
+            }
         }
-        return $next;
+
+        // normal logic for when there is 1+ migrations and we aren't at VERSION_ZERO
+        $foundCurrent = false;
+        $currentIndex = 0;
+        foreach ($migrationVersions as $version) {
+            if ($currentMigration === $version)
+            {
+                $foundCurrent = true;
+                break;
+            }
+            $currentIndex++;
+        }
+        if (!$foundCurrent)
+        {
+            throw new Exception("Current version {$currentMigration} is not a known migration.");
+        }
+        //$this->logMessage("Index of current migration {$currentMigration} is {$currentIndex}.\n", true);
+
+        if ($direction === Migrator::DIRECTION_UP)
+        {
+            $lastIndex = count($migrationVersions) - 1;
+            if ($currentIndex === $lastIndex)
+            {
+                return NULL;
+            }
+            return $migrationVersions[$currentIndex + 1];
+        }
+        else
+        {
+            if ($currentIndex === 0)
+            {
+                return NULL;
+            }
+            return $migrationVersions[$currentIndex - 1];
+        }
     }
 
     // ACTIONS
@@ -371,6 +415,16 @@ END;
 
     public function upgradeToVersion($toVersion)
     {
+        $this->migrateToVersion($toVersion, Migrator::DIRECTION_UP);
+    }
+
+    public function downgradeToVersion($toVersion)
+    {
+        $this->migrateToVersion($toVersion, Migrator::DIRECTION_DOWN);
+    }
+
+    public function migrateToVersion($toVersion, $direction)
+    {
         $currentVersion = $this->getVersionProvider()->getVersion($this);
         if ($currentVersion === $toVersion)
         {
@@ -378,12 +432,27 @@ END;
             return;
         }
 
-        $this->logMessage("Updgrading from version {$currentVersion} to {$toVersion}.\n");
-        while (true) {
-            $nextMigration = $this->findNextMigration($currentVersion);
+        if ($direction === Migrator::DIRECTION_UP)
+        {
+            $info = array(
+                'migrateF'      => 'runUpgrade',
+                'actionName'    => 'Upgrading',
+            );
+        }
+        else
+        {
+            $info = array(
+                'migrateF'      => 'runDowngrade',
+                'actionName'    => 'Downgrading',
+            );
+        }
+
+        $this->logMessage("{$info['actionName']} from version {$currentVersion} to {$toVersion}.\n");
+        while ($currentVersion !== $toVersion) {
+            $nextMigration = $this->findNextMigration($currentVersion, $direction);
             if (!$nextMigration) break;
 
-            $ok = $this->runUpgrade($nextMigration);
+            $ok = $this->$info['migrateF']($nextMigration);
             if (!$ok)
             {
                 break;
@@ -392,11 +461,11 @@ END;
         }
         if ($currentVersion === $toVersion)
         {
-            $this->logMessage("Upgrade to {$toVersion} succeeded.\n");
+            $this->logMessage("{$info['actionName']} to {$toVersion} succeeded.\n");
         }
         else
         {
-            $this->logMessage("Upgrade failed at {$currentVersion}. Current version is " . $this->getVersionProvider()->getVersion($this) . "\n");
+            $this->logMessage("{$info['actionName']} failed at {$currentVersion}. Current version is " . $this->getVersionProvider()->getVersion($this) . "\n");
         }
     }
 
@@ -435,9 +504,10 @@ END;
     }
 }
 
-$m = new Migrator(array('verbose' => false));
+$m = new Migrator(array('verbose' => true));
 $m->clean();
 $m->upgradeToLatest();
+$m->downgradeToVersion('20090716_204830');
 print "\n";
 
 
