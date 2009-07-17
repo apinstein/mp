@@ -358,7 +358,9 @@ class Migration{$dts} extends Migration
     }
 }
 END;
-        file_put_contents($this->getMigrationsDirectory() . "/{$filename}", $tpl);
+        $filePath = $this->getMigrationsDirectory() . "/{$filename}";
+        file_put_contents($filePath, $tpl);
+        $this->logMessage("Created migration {$dts} at {$filePath}.\n");
     }
 
     private function instantiateMigration($migrationName)
@@ -436,6 +438,12 @@ END;
         return $this->runMigration($migrationName, Migrator::DIRECTION_DOWN);
     }
 
+    /**
+     * Migrate to the specified version.
+     *
+     * @param string The Version.
+     * @return boolean TRUE if migration successfully ended on specified version.
+     */
     public function migrateToVersion($toVersion)
     {
         $this->logMessage("\n");
@@ -444,7 +452,7 @@ END;
         if ($currentVersion === $toVersion)
         {
             $this->logMessage("Already at version {$currentVersion}.\n");
-            return;
+            return true;
         }
 
         // verify target version
@@ -452,7 +460,7 @@ END;
             $this->indexOfVersion($toVersion);
         } catch (MigrationUnknownVersionException $e) {
             $this->logMessage("Cannot migrate to version {$toVersion} because it does not exist.\n");
-            return;
+            return false;
         }
 
         // calculate direction
@@ -487,10 +495,12 @@ END;
         if ($currentVersion === $toVersion)
         {
             $this->logMessage("{$actionName} to {$toVersion} succeeded.\n");
+            return true;
         }
         else
         {
             $this->logMessage("{$actionName} failed at {$currentVersion}. Current version is " . $this->getVersionProvider()->getVersion($this) . "\n");
+            return false;
         }
     }
 
@@ -520,11 +530,16 @@ END;
      * Upgrade to the latest version of the application.
      *
      * @see Migrator::clean()
+     * @return boolean TRUE if migration successfully ended at latest version.
      */
     public function upgradeToLatest()
     {
-        if (empty($this->migrationsFiles)) return;
+        if (empty($this->migrationsFiles))
+        {
+            $this->logMessage("No migrations available.\n");
+            return true;
+        }
         $lastMigration = array_pop(array_keys($this->migrationsFiles));
-        $this->migrateToVersion($lastMigration, Migrator::DIRECTION_UP);
+        return $this->migrateToVersion($lastMigration, Migrator::DIRECTION_UP);
     }
 }
