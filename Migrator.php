@@ -152,10 +152,6 @@ class Migrator
      */
     protected $verbose;
     /**
-     * @var string The version of the app at the beginning of the migrator run.
-     */
-    protected $initialVersion = NULL;
-    /**
      * @var array An array of all migrations installed for this app.
      */
     protected $migrationsFiles = array();
@@ -198,8 +194,7 @@ class Migrator
         }
 
         // initialize migration state
-        $this->initialVersion = $this->getVersionProvider()->getVersion($this);
-        $this->logMessage("MP - The PHP Migrator.\nCurrent Version: {$this->initialVersion}\n");
+        $this->logMessage("MP - The PHP Migrator.\n");
 
         $this->collectionMigrationsFiles();
     }
@@ -218,7 +213,7 @@ class Migrator
             // sort in reverse chronological order
             natsort($this->migrationsFiles);
         }
-        $this->logMessage("Found " . count($this->migrationsFiles) . " migrations.\n");
+        $this->logMessage("Found " . count($this->migrationsFiles) . " migrations.\n", true);
     }
 
     public function logMessage($msg, $onlyIfVerbose = false)
@@ -260,10 +255,10 @@ class Migrator
         return $this->versionProvider;
     }
 
-    public function findNextMigration($currentMigration)
+    protected function findNextMigration($currentMigration)
     {
         $next = NULL;
-        $reachedCurrent = false;
+        $reachedCurrent = ($currentMigration === Migrator::VERSION_ZERO);
         foreach ($this->migrationsFiles as $migrationName => $migrationFile) {
             if (!$reachedCurrent)
             {
@@ -288,7 +283,7 @@ class Migrator
      */
     public function clean()
     {
-        $this->logMessage("Cleaning...");
+        $this->logMessage("Cleaning...\n");
 
         // reset version number
         $this->getVersionProvider()->setVersion($this, Migrator::VERSION_ZERO);
@@ -325,13 +320,79 @@ END;
         file_put_contents($this->getMigrationsDirectory() . "/{$filename}", $tpl);
     }
 
-    public function migrateToVersion($v)
+    /**
+     * Run the given migration.
+     *
+     * @param string The migration version.
+     * @return boolean TRUE if migration ran successfully, false otherwise.
+     */
+    public function runMigration($migrationName)
     {
+        require_once($this->getMigrationsDirectory() . "/" . $this->migrationsFiles[$migrationName]);
+        $migrationClassName = "Migration{$migrationName}";
+        $migration = new $migrationClassName;
+        $this->logMessage("Running migration: " . $migration->description() . "\n", true);
+        try {
+            $migration->up($this);
+            $this->getVersionProvider()->setVersion($this, $migrationName);
+            return true;
+        } catch (Exception $e) {
+            $this->logMessage("Error during migration {$migrationName}: {$e}\n");
+            if (method_exists($migration, 'upRollback'))
+            {
+                try {
+                    $migration->upRollback($this);
+                } catch (Exception $e) {
+                    $this->logMessage("Error during rollback of migration {$migrationName}: {$e}\n");
+                }
+
+            }
+        }
+        return false;
+    }
+
+    public function migrateToVersion($toVersion)
+    {
+        $currentVersion = $this->getVersionProvider()->getVersion($this);
+        if ($currentVersion === $toVersion)
+        {
+            $this->logMessage("Already at version {$currentVersion}.\n");
+            return;
+        }
+
+        $this->logMessage("Migrating from version {$currentVersion} to {$toVersion}.\n");
+        while (true) {
+            $nextMigration = $this->findNextMigration($currentVersion);
+            if (!$nextMigration) break;
+
+            $ok = $this->runMigration($nextMigration);
+            if (!$ok)
+            {
+                break;
+            }
+            $currentVersion = $nextMigration;
+        }
+        if ($currentVersion === $toVersion)
+        {
+            $this->logMessage("Migration to {$toVersion} succeeded.\n");
+        }
+        else
+        {
+            $this->logMessage("Migration failed at {$currentVersion}. Current version is " . $this->getVersionProvider()->getVersion($this) . "\n");
+        }
+    }
+
+    public function migrateToLatest()
+    {
+        if (empty($this->migrationsFiles)) return;
+        $lastMigration = array_pop(array_keys($this->migrationsFiles));
+        $this->migrateToVersion($lastMigration);
     }
 }
 
-$m = new Migrator();
-$m->createMigration();
+$m = new Migrator(array('verbose' => false));
+//$m->clean();
+$m->migrateToLatest();
 print "\n";
 
 
