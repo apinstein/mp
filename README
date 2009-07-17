@@ -28,6 +28,18 @@ $ mp -c create                  # create a new migration file
 $ mp -r                         # Reset to "clean" state then upgrade to latest revision
 $ mp -t 20090716_204830         # Migrate directly to revision 20090716_204830
 
+If you need DB access in your migrations, you can bootstrap them yourself, or, if you supply a dsn like so:
+$ mp -x 'pgsql:dbname=mydb;user=mydbuser;host=localhost'
+
+Then in your migrations you can do:
+
+$this->migrator->getDbCon()->exec($sql);
+
+And in the clean() function, it's:
+$migrator->getDbCon()->exec($sql);
+
+NOTE: If you use Migrator's db connection, it is configured to throw PDOException on error.
+
 EXAMPLE API USAGE
 $m = new Migrator();
 $m->clean();
