@@ -255,6 +255,26 @@ class Migrator
         return $this->versionProvider;
     }
 
+    protected function indexOfVersion($findVersion)
+    {
+        // normal logic for when there is 1+ migrations and we aren't at VERSION_ZERO
+        $foundCurrent = false;
+        $currentIndex = 0;
+        foreach (array_keys($this->migrationsFiles) as $version) {
+            if ($version === $findVersion)
+            {
+                $foundCurrent = true;
+                break;
+            }
+            $currentIndex++;
+        }
+        if (!$foundCurrent)
+        {
+            throw new Exception("Version {$findVersion} is not a known migration.");
+        }
+        return $currentIndex;
+    }
+
     /**
      * Find the next migration to run in the given direction.
      *
@@ -284,21 +304,7 @@ class Migrator
         }
 
         // normal logic for when there is 1+ migrations and we aren't at VERSION_ZERO
-        $foundCurrent = false;
-        $currentIndex = 0;
-        foreach ($migrationVersions as $version) {
-            if ($currentMigration === $version)
-            {
-                $foundCurrent = true;
-                break;
-            }
-            $currentIndex++;
-        }
-        if (!$foundCurrent)
-        {
-            throw new Exception("Current version {$currentMigration} is not a known migration.");
-        }
-
+        $currentIndex = $this->indexOfVersion($currentMigration);
         if ($direction === Migrator::DIRECTION_UP)
         {
             $lastIndex = count($migrationVersions) - 1;
@@ -355,6 +361,52 @@ END;
     }
 
     /**
+     * Run the given migration in the specified direction.
+     *
+     * @param string The migration version.
+     * @param string Direction.
+     * @return boolean TRUE if migration ran successfully, false otherwise.
+     */
+    public function runMigration($migrationName, $direction)
+    {
+        if ($direction === Migrator::DIRECTION_UP)
+        {
+            $info = array(
+                'actionName'        => 'Upgrade',
+                'migrateF'          => 'up',
+                'migrateRollbackF'  => 'upRollback',
+            );
+        }
+        else
+        {
+            $info = array(
+                'actionName'        => 'Downgrade',
+                'migrateF'          => 'down',
+                'migrateRollbackF'  => 'downRollback',
+            );
+        }
+        $migration = $this->instantiateMigration($migrationName);
+        $this->logMessage("Running {$info['actionName']}: " . $migration->description() . "\n", false);
+        try {
+            $migration->$info['migrateF']($this);
+            $this->getVersionProvider()->setVersion($this, $migrationName);
+            return true;
+        } catch (Exception $e) {
+            $this->logMessage("Error during {$info['actionName']} migration {$migrationName}: {$e}\n");
+            if (method_exists($migration, $info['migrateRollbackF']))
+            {
+                try {
+                    $migration->$info['migrateRollbackF']($this);
+                } catch (Exception $e) {
+                    $this->logMessage("Error during rollback of {$info['actionName']} migration {$migrationName}: {$e}\n");
+                }
+
+            }
+        }
+        return false;
+    }
+
+    /**
      * Run the given migration as an upgrade.
      *
      * @param string The migration version.
@@ -362,25 +414,7 @@ END;
      */
     public function runUpgrade($migrationName)
     {
-        $migration = $this->instantiateMigration($migrationName);
-        $this->logMessage("Running upgrade: " . $migration->description() . "\n", false);
-        try {
-            $migration->up($this);
-            $this->getVersionProvider()->setVersion($this, $migrationName);
-            return true;
-        } catch (Exception $e) {
-            $this->logMessage("Error during migration {$migrationName}: {$e}\n");
-            if (method_exists($migration, 'upRollback'))
-            {
-                try {
-                    $migration->upRollback($this);
-                } catch (Exception $e) {
-                    $this->logMessage("Error during rollback of migration {$migrationName}: {$e}\n");
-                }
-
-            }
-        }
-        return false;
+        return $this->runMigration($migrationName, Migrator::DIRECTION_UP);
     }
 
     /**
@@ -391,25 +425,7 @@ END;
      */
     public function runDowngrade($migrationName)
     {
-        $migration = $this->instantiateMigration($migrationName);
-        $this->logMessage("Running downgrade: " . $migration->description() . "\n", false);
-        try {
-            $migration->down($this);
-            $this->getVersionProvider()->setVersion($this, $migrationName);
-            return true;
-        } catch (Exception $e) {
-            $this->logMessage("Error during migration {$migrationName}: {$e}\n");
-            if (method_exists($migration, 'downRollback'))
-            {
-                try {
-                    $migration->downRollback($this);
-                } catch (Exception $e) {
-                    $this->logMessage("Error during rollback of migration {$migrationName}: {$e}\n");
-                }
-
-            }
-        }
-        return false;
+        return $this->runMigration($migrationName, Migrator::DIRECTION_DOWN);
     }
 
     public function upgradeToVersion($toVersion)
@@ -424,6 +440,8 @@ END;
 
     public function migrateToVersion($toVersion, $direction)
     {
+        $this->logMessage("\n");
+
         $currentVersion = $this->getVersionProvider()->getVersion($this);
         if ($currentVersion === $toVersion)
         {
@@ -431,27 +449,30 @@ END;
             return;
         }
 
-        if ($direction === Migrator::DIRECTION_UP)
+        // make sure toVersion is in direction of currentVersion
+        if ($currentVersion !== Migrator::VERSION_ZERO)
         {
-            $info = array(
-                'migrateF'      => 'runUpgrade',
-                'actionName'    => 'Upgrading',
-            );
-        }
-        else
-        {
-            $info = array(
-                'migrateF'      => 'runDowngrade',
-                'actionName'    => 'Downgrading',
-            );
+            $currentVersionIndex = $this->indexOfVersion($currentVersion);
+            $toVersionIndex = $this->indexOfVersion($toVersion);
+            if ($direction === Migrator::DIRECTION_UP && $currentVersionIndex > $toVersionIndex)
+            {
+                $this->logMessage("Version {$currentVersion} is already newer than {$toVersion}.\n");
+                return;
+            }
+            else if ($direction === Migrator::DIRECTION_DOWN && $currentVersionIndex < $toVersionIndex)
+            {
+                $this->logMessage("Version {$currentVersion} is already below {$toVersion}.\n");
+                return;
+            }
         }
 
-        $this->logMessage("{$info['actionName']} from version {$currentVersion} to {$toVersion}.\n");
+        $actionName = ($direction === Migrator::DIRECTION_UP ? 'Upgrading' : 'Downgrading');
+        $this->logMessage("{$actionName} from version {$currentVersion} to {$toVersion}.\n");
         while ($currentVersion !== $toVersion) {
             $nextMigration = $this->findNextMigration($currentVersion, $direction);
             if (!$nextMigration) break;
 
-            $ok = $this->$info['migrateF']($nextMigration);
+            $ok = $this->runMigration($nextMigration, $direction);
             if (!$ok)
             {
                 break;
@@ -460,11 +481,11 @@ END;
         }
         if ($currentVersion === $toVersion)
         {
-            $this->logMessage("{$info['actionName']} to {$toVersion} succeeded.\n");
+            $this->logMessage("{$actionName} to {$toVersion} succeeded.\n");
         }
         else
         {
-            $this->logMessage("{$info['actionName']} failed at {$currentVersion}. Current version is " . $this->getVersionProvider()->getVersion($this) . "\n");
+            $this->logMessage("{$actionName} failed at {$currentVersion}. Current version is " . $this->getVersionProvider()->getVersion($this) . "\n");
         }
     }
 
@@ -503,10 +524,12 @@ END;
     }
 }
 
-$m = new Migrator(array('verbose' => true));
+$m = new Migrator(array('verbose' => false));
 $m->clean();
 $m->upgradeToLatest();
 $m->downgradeToVersion('20090716_204830');
+$m->upgradeToVersion('20090716_205029');
+$m->downgradeToVersion('20090716_212141');
 print "\n";
 
 
