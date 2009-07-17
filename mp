@@ -92,39 +92,42 @@ if (isset($cliOpts['x']))
     $opts[Migrator::OPT_PDO_DSN] = $cliOpts['x'];
 }
 
-$m = new Migrator($opts);
-
-if (isset($cliOpts['r']))
-{
-    $m->clean();
-}
-
-// are we migrating, cleaning, or creating?
-switch ($cliOpts['c']) {
-    case 'create':
-        $m->createMigration();
-        exit(0);
-        break;
-    case 'clean':
+try {
+    $m = new Migrator($opts);
+    if (isset($cliOpts['r']))
+    {
         $m->clean();
-        exit(0);
-        break;
-    case 'migrate':
-        $targetVersion = NULL;
-        if (isset($cliOpts['t']))
-        {
-            $targetVersion = $cliOpts['t'];
-        }
+    }
 
-        if ($targetVersion === NULL)
-        {
-            $ok = $m->upgradeToLatest();
-        }
-        else
-        {
-            $ok = $m->migrateToVersion($targetVersion);
-        }
-        exit($ok === true ? 0 : 1);
-        break;
+    // are we migrating, cleaning, or creating?
+    switch ($cliOpts['c']) {
+        case 'create':
+            $m->createMigration();
+            exit(0);
+            break;
+        case 'clean':
+            $m->clean();
+            exit(0);
+            break;
+        case 'migrate':
+            $targetVersion = NULL;
+            if (isset($cliOpts['t']))
+            {
+                $targetVersion = $cliOpts['t'];
+            }
+
+            if ($targetVersion === NULL)
+            {
+                $ok = $m->upgradeToLatest();
+            }
+            else
+            {
+                $ok = $m->migrateToVersion($targetVersion);
+            }
+            exit($ok === true ? 0 : 1);
+            break;
+    }
+} catch (Exception $e) {
+    print "Error running migration: " . $e->getMessage() . "\n";
+    exit(1);
 }
-
