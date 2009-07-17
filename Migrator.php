@@ -417,7 +417,7 @@ END;
             );
         }
         $migration = $this->instantiateMigration($migrationName);
-        $this->logMessage("Running {$info['actionName']} to {$migrationName}: " . $migration->description() . "\n", false);
+        $this->logMessage("Running {$migrationName} {$info['actionName']}: " . $migration->description() . "\n", false);
         try {
             $migration->$info['migrateF']($this);
             if ($direction === Migrator::DIRECTION_UP)
@@ -427,7 +427,7 @@ END;
             else
             {
                 $downgradedToVersion = $this->findNextMigration($migrationName, Migrator::DIRECTION_DOWN);
-                $this->getVersionProvider()->setVersion($this, $downgradedToVersion);
+                $this->getVersionProvider()->setVersion($this, ($downgradedToVersion === NULL ? Migrator::VERSION_ZERO : $downgradedToVersion));
             }
             return true;
         } catch (Exception $e) {
@@ -485,18 +485,23 @@ END;
         }
 
         // verify target version
-        try {
-            $this->indexOfVersion($toVersion);
-        } catch (MigrationUnknownVersionException $e) {
-            if ($toVersion === Migrator::VERSION_ZERO)
-            {
-                $this->logMessage("If you want to migrate to version 0, run clean().\n");
-            }
-            else
-            {
+        if ($toVersion !== Migrator::VERSION_ZERO)
+        {
+            try {
+                $this->indexOfVersion($toVersion);
+            } catch (MigrationUnknownVersionException $e) {
                 $this->logMessage("Cannot migrate to version {$toVersion} because it does not exist.\n");
+                return false;
             }
-            return false;
+        }
+        // verify current version
+        try {
+            if ($currentVersion !== Migrator::VERSION_ZERO)
+            {
+                $currentVersionIndex = $this->indexOfVersion($currentVersion);
+            }
+        } catch (MigrationUnknownVersionException $e) {
+            $this->logMessage("Cannot validate existing version {$currentVersion} because it does not exist.\n");
         }
 
         // calculate direction
@@ -508,6 +513,10 @@ END;
         {
             $direction = Migrator::DIRECTION_DOWN;
         }
+        else if ($toVersion === Migrator::VERSION_ZERO)
+        {
+            $direction = Migrator::DIRECTION_DOWN;
+        }
         else
         {
             $currentVersionIndex = $this->indexOfVersion($currentVersion);
@@ -515,27 +524,45 @@ END;
             $direction = ($toVersionIndex > $currentVersionIndex ? Migrator::DIRECTION_UP : Migrator::DIRECTION_DOWN);
         }
 
-        $actionName = ($direction === Migrator::DIRECTION_UP ? 'Upgrading' : 'Downgrading');
+        $actionName = ($direction === Migrator::DIRECTION_UP ? 'Upgrade' : 'Downgrade');
         $this->logMessage("{$actionName} from version {$currentVersion} to {$toVersion}.\n");
         while ($currentVersion !== $toVersion) {
-            $nextMigration = $this->findNextMigration($currentVersion, $direction);
-            if (!$nextMigration) break;
-
-            $ok = $this->runMigration( ($direction === Migrator::DIRECTION_UP ? $nextMigration : $currentVersion), $direction);
-            if (!$ok)
+            if ($direction === Migrator::DIRECTION_UP)
             {
-                break;
+                $nextMigration = $this->findNextMigration($currentVersion, $direction);
+                if (!$nextMigration) break;
+
+                $ok = $this->runMigration($nextMigration, Migrator::DIRECTION_UP);
+                if (!$ok)
+                {
+                    break;
+                }
+            }
+            else
+            {
+                $nextMigration = $this->findNextMigration($currentVersion, Migrator::DIRECTION_DOWN);
+                $ok = $this->runMigration($currentVersion, $direction);
+                if (!$ok)
+                {
+                    break;
+                }
+                if (!$nextMigration)
+                {
+                    // next is 0, we are done!
+                    $currentVersion = $nextMigration = Migrator::VERSION_ZERO;
+                }
             }
             $currentVersion = $nextMigration;
+            $this->logMessage("Current version now {$currentVersion}\n", true);
         }
         if ($currentVersion === $toVersion)
         {
-            $this->logMessage("{$actionName} to {$toVersion} succeeded.\n");
+            $this->logMessage("{$toVersion} {$actionName} succeeded.\n");
             return true;
         }
         else
         {
-            $this->logMessage("{$actionName} failed at {$toVersion}.\nRolled back to " . $this->getVersionProvider()->getVersion($this) . ".\n");
+            $this->logMessage("{$toVersion} {$actionName} failed.\nRolled back to " . $this->getVersionProvider()->getVersion($this) . ".\n");
             return false;
         }
     }
