@@ -58,7 +58,7 @@ if (isset($cliOpts['h']))
 migrate usage:
   -c --command [migrate|create|clean]
      migrate options:
-        -t --target <TargetVersion>
+        -t --target <TargetVersion> or 0|up|down
         -r --clean Run clean first
         -x --dsn <PDO DSN>
   -v --verbose Verbose messages

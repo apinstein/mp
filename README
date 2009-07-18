@@ -48,6 +48,11 @@ $m->downgradeToVersion('20090716_204830');
 $m->upgradeToVersion('20090716_205029');
 $m->downgradeToVersion('20090716_212141');
 
+NOTE FOR SOURCE CONTROL
+If you use the file-based version tracking (ie migrations/version.txt) then make sure to have your source control
+system *ignore* that file. You definitely don't want yoru system to think it's been updated when you push new code
+to production but before you run your migrations!
+
 INTEGRATION
 While MP can be operated purely via the migrate command line tool, it is also designed to be implemented into your
 web application or with any framework. You can use the Migrator API to custom-configure MP's behavior for your
@@ -58,7 +63,10 @@ It also works well with ORMs that don't have an API to manage schemas, as you ca
 their DB connection for executing SQL migrations.
 
 ROADMAP / TODO
-- Addition of a generic schema manipulation API so you can use MP to manage your database without having to write SQL.
+- Add long-option support. See http://cliframework.com/, looks pretty interesting.
+- Automatically walk up from pwd looking for migrations/ directory so you only have to be *under* your project root to run mp successfully.
+- Add support for meta-versions in -t [up|down] to make it easy to move relative to current version.
 - Addition of a MigratorVersionProvider that stores the version in a database rather than on the filesystem.
 - Addition of mutex protection to prevent multiple migrations from running at the same time.
+- Addition of a generic schema manipulation API so you can use MP to manage your database without having to write SQL. Is this even necessary?
 

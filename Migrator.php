@@ -232,6 +232,16 @@ class Migrator
             }
         }
 
+        $this->initializeMigrationsDir();
+
+        // initialize migration state
+        $this->logMessage("MP - The PHP Migrator.\n");
+
+        $this->collectionMigrationsFiles();
+    }
+
+    protected function initializeMigrationsDir()
+    {
         // initialize migrations dir
         $migrationsDir = $this->getMigrationsDirectory();
         if (!file_exists($migrationsDir))
@@ -249,12 +259,8 @@ class MigrateClean
 }
 END;
             file_put_contents($migrationsDir . '/clean.php', $cleanTPL);
+            $this->getVersionProvider()->setVersion($this, Migrator::VERSION_ZERO);
         }
-
-        // initialize migration state
-        $this->logMessage("MP - The PHP Migrator.\n");
-
-        $this->collectionMigrationsFiles();
     }
 
     protected function collectionMigrationsFiles()
