@@ -1,1 +1,2 @@
 migrations/*
+test/migrations/version.txt

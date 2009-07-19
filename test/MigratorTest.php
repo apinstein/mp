@@ -38,6 +38,11 @@ class MigratorTest extends PHPUnit_Framework_TestCase
         $this->assertEquals($counter, $testMigrationIncrementedNumber, "testMigrationIncrementedNumber wrong");
     }
 
+    function testLatestVersion()
+    {
+        $this->assertEquals('20090719_000005', $this->migrator->latestVersion());
+    }
+
     function testCleanGoesToVersionZero()
     {
         $this->migrator->clean();
@@ -46,9 +51,43 @@ class MigratorTest extends PHPUnit_Framework_TestCase
 
     function testMigratingToVersionZero()
     {
-        $this->migrator->upgradeToLatest();
+        $this->migrator->migrateToVersion(Migrator::VERSION_HEAD);
         $this->migrator->migrateToVersion(Migrator::VERSION_ZERO);
         $this->assertAtVersion(Migrator::VERSION_ZERO, 0);
+    }
+
+    function testMigratingToHead()
+    {
+        $this->migrator->migrateToVersion(Migrator::VERSION_HEAD);
+        $this->assertAtVersion('20090719_000005', 5);
+    }
+
+    function testMigrateUp()
+    {
+        // mock out migrator; make sure UP calls migrate to appropriate version
+        $this->migrator->migrateToVersion('20090719_000002');
+//        $mock = $this->getMock($this->migrator);
+//        $mock->expects($this->once())
+//                        ->method('migrateToVersion')
+//                        ->with($this->equalTo('20090719_000003'));
+//        $this->migrator->migrateToVersion(Migrator::VERSION_UP);
+
+          $this->migrator->migrateToVersion(Migrator::VERSION_UP);
+          $this->assertAtVersion('20090719_000003', 3);
+    }
+
+    function testMigrateDown()
+    {
+        // mock out migrator; make sure UP calls migrate to appropriate version
+        $this->migrator->migrateToVersion('20090719_000002');
+//        $mock = $this->getMock($this->migrator);
+//        $mock->expects($this->once())
+//                        ->method('migrateToVersion')
+//                        ->with($this->equalTo('20090719_000001'));
+//        $this->migrator->migrateToVersion(Migrator::VERSION_DOWN);
+
+        $this->migrator->migrateToVersion(Migrator::VERSION_DOWN);
+        $this->assertAtVersion('20090719_000001', 1);
     }
 
     function testMigrateToVersion1()
@@ -79,33 +118,5 @@ class MigratorTest extends PHPUnit_Framework_TestCase
     {
         $this->migrator->migrateToVersion('20090719_000005');
         $this->assertAtVersion('20090719_000005', 5);
-    }
-
-    function testMigrateUp()
-    {
-        // mock out migrator; make sure UP calls migrate to appropriate version
-        $this->migrator->migrateToVersion('20090719_000002');
-//        $mock = $this->getMock($this->migrator);
-//        $mock->expects($this->once())
-//                        ->method('migrateToVersion')
-//                        ->with($this->equalTo('20090719_000003'));
-//        $this->migrator->migrateToVersion(Migrator::VERSION_UP);
-
-          $this->migrator->migrateToVersion(Migrator::VERSION_UP);
-          $this->assertAtVersion('20090719_000003', 3);
-    }
-
-    function testMigrateDown()
-    {
-        // mock out migrator; make sure UP calls migrate to appropriate version
-        $this->migrator->migrateToVersion('20090719_000002');
-//        $mock = $this->getMock($this->migrator);
-//        $mock->expects($this->once())
-//                        ->method('migrateToVersion')
-//                        ->with($this->equalTo('20090719_000001'));
-//        $this->migrator->migrateToVersion(Migrator::VERSION_DOWN);
-
-        $this->migrator->migrateToVersion(Migrator::VERSION_DOWN);
-        $this->assertAtVersion('20090719_000001', 1);
     }
 }

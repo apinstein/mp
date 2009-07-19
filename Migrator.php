@@ -68,6 +68,13 @@ class MigratorVersionProviderFile implements MigratorVersionProvider
  *
  * Each MP "migration" is implemented by calling functions in the corresponding concrete Migration subclass.
  *
+ * NOTE ON NOMENCLATURE
+ * A "Version" is a "state" of the application represented.
+ * A "Migration" is a changeset that when run UP results in the application being at the version of the migration's name.
+ * When a migration is run DOWN the application is returned to the version of the previous migration.
+ *
+ * A VERSION is a point in time, labeled by a migration name. A Migration is a class that contains code to go UP to a version, or DOWN to the previous version.
+ *
  * Subclasses must implement at least the up() and down() methods.
  */
 abstract class Migration
@@ -166,6 +173,7 @@ class Migrator
     const VERSION_ZERO                   = '0';
     const VERSION_UP                     = 'up';
     const VERSION_DOWN                   = 'down';
+    const VERSION_HEAD                   = 'head';
 
     /**
      * @var string The path to the directory where migrations are stored.
@@ -194,7 +202,7 @@ class Migrator
     /**
      * @var array An array of all migrations installed for this app.
      */
-    protected $migrationsFiles = array();
+    protected $migrationFiles = array();
 
     /**
      * Create a migrator instance.
@@ -246,7 +254,7 @@ class Migrator
         // initialize migration state
         $this->logMessage("MP - The PHP Migrator.\n");
 
-        $this->collectionMigrationsFiles();
+        $this->collectMigrationFiles();
     }
 
     protected function initializeMigrationsDir()
@@ -277,7 +285,7 @@ END;
         return $this->getVersionProvider()->getVersion($this);
     }
 
-    protected function collectionMigrationsFiles()
+    protected function collectMigrationFiles()
     {
         $this->logMessage("Looking for migrations...\n", true);
         foreach (new DirectoryIterator($this->getMigrationsDirectory()) as $file) {
@@ -286,12 +294,12 @@ END;
             $matches = array();
             if (preg_match('/^([0-9]{8}_[0-9]{6}).php$/', $file->getFilename(), $matches))
             {
-                $this->migrationsFiles[$matches[1]] = $file->getFilename();
+                $this->migrationFiles[$matches[1]] = $file->getFilename();
             }
             // sort in reverse chronological order
-            natsort($this->migrationsFiles);
+            natsort($this->migrationFiles);
         }
-        $this->logMessage("Found " . count($this->migrationsFiles) . " migrations:" . print_r($this->migrationsFiles, true), true);
+        $this->logMessage("Found " . count($this->migrationFiles) . " migrations:" . print_r($this->migrationFiles, true), true);
     }
 
     public function logMessage($msg, $onlyIfVerbose = false)
@@ -339,12 +347,21 @@ END;
         return $this->versionProvider;
     }
 
+    /**
+     * Get the index of the passed version number in the migrationFiles array.
+     *
+     * NOTE: This function does NOT accept the Migrator::VERSION_* constants.
+     *
+     * @param string The version number to look for
+     * @return integer The index of the migration in the migrationFiles array.
+     * @throws object MigrationUnknownVersionException
+     */
     protected function indexOfVersion($findVersion)
     {
         // normal logic for when there is 1+ migrations and we aren't at VERSION_ZERO
         $foundCurrent = false;
         $currentIndex = 0;
-        foreach (array_keys($this->migrationsFiles) as $version) {
+        foreach (array_keys($this->migrationFiles) as $version) {
             if ($version === $findVersion)
             {
                 $foundCurrent = true;
@@ -360,6 +377,22 @@ END;
     }
 
     /**
+     * Get the migration name of the latest version.
+     *
+     * @return string The "latest" migration version.
+     */
+    public function latestVersion()
+    {
+        if (empty($this->migrationFiles))
+        {
+            $this->logMessage("No migrations available.\n");
+            return true;
+        }
+        $lastMigration = array_pop(array_keys($this->migrationFiles));
+        return $lastMigration;
+    }
+
+    /**
      * Find the next migration to run in the given direction.
      *
      * @param string Current version
@@ -370,9 +403,9 @@ END;
     protected function findNextMigration($currentMigration, $direction)
     {
         // special case when no migrations exist
-        if (count($this->migrationsFiles) === 0) return NULL;
+        if (count($this->migrationFiles) === 0) return NULL;
 
-        $migrationVersions = array_keys($this->migrationsFiles);
+        $migrationVersions = array_keys($this->migrationFiles);
 
         // special case when current == VERSION_ZERO
         if ($currentMigration === Migrator::VERSION_ZERO)
@@ -442,7 +475,7 @@ END;
 
     private function instantiateMigration($migrationName)
     {
-        require_once($this->getMigrationsDirectory() . "/" . $this->migrationsFiles[$migrationName]);
+        require_once($this->getMigrationsDirectory() . "/" . $this->migrationFiles[$migrationName]);
         $migrationClassName = "Migration{$migrationName}";
         return new $migrationClassName($this);
     }
@@ -549,6 +582,10 @@ END;
         {
             $toVersion = $this->findNextMigration($currentVersion, Migrator::DIRECTION_DOWN);
         }
+        else if ($toVersion === Migrator::VERSION_HEAD)
+        {
+            $toVersion = $this->latestVersion();
+        }
 
         // verify target version
         if ($toVersion !== Migrator::VERSION_ZERO)
@@ -575,7 +612,7 @@ END;
         {
             $direction = Migrator::DIRECTION_UP;
         }
-        else if ($currentVersion === array_pop(array_keys($this->migrationsFiles)))
+        else if ($currentVersion === array_pop(array_keys($this->migrationFiles)))
         {
             $direction = Migrator::DIRECTION_DOWN;
         }
@@ -637,7 +674,6 @@ END;
      * Reset the application to "initial state" suitable for running migrations against.
      *
      * @return object Migrator
-     * @see Migrator::upgradeToLatest()
      */
     public function clean()
     {
@@ -665,20 +701,4 @@ END;
         return $this;
     }
 
-    /**
-     * Upgrade to the latest version of the application.
-     *
-     * @see Migrator::clean()
-     * @return boolean TRUE if migration successfully ended at latest version.
-     */
-    public function upgradeToLatest()
-    {
-        if (empty($this->migrationsFiles))
-        {
-            $this->logMessage("No migrations available.\n");
-            return true;
-        }
-        $lastMigration = array_pop(array_keys($this->migrationsFiles));
-        return $this->migrateToVersion($lastMigration, Migrator::DIRECTION_UP);
-    }
 }

@@ -61,12 +61,16 @@ if (isset($cliOpts['h']))
 migrate usage:
   -c --command [migrate|create|clean]
      migrate options:
-        -t --target <TargetVersion> or 0|up|down
+        -t --target <TargetVersion> or 0|up|down|head|redo
+           * redo is an alias for down + up
         -r --clean Run clean first
         -x --dsn <PDO DSN>
   -v --verbose Verbose messages
+  -q --quiet Supress all message
   -h --help Show this help
   -d --dir <MigrationDir>
+
+NOTE: long options are not yet implemented.
 
 Default command is "migrate to latest".
 
@@ -125,13 +129,22 @@ try {
 
             if ($targetVersion === NULL)
             {
-                $ok = $m->upgradeToLatest();
+                $tagetVersion = Migrator::VERSION_HEAD;
+            }
+            else if ($targetVersion === 'redo')
+            {
+                $ok = $m->migrateToVersion(Migrator::VERSION_DOWN);
+                if ($ok)
+                {
+                    $ok = $m->migrateToVersion(Migrator::VERSION_UP);
+                }
+                exit($ok === true ? 0 : 1);
             }
             else
             {
                 $ok = $m->migrateToVersion($targetVersion);
+                exit($ok === true ? 0 : 1);
             }
-            exit($ok === true ? 0 : 1);
             break;
     }
 } catch (Exception $e) {
