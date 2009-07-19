@@ -567,11 +567,6 @@ END;
         $this->logMessage("\n");
 
         $currentVersion = $this->getVersionProvider()->getVersion($this);
-        if ($currentVersion === $toVersion)
-        {
-            $this->logMessage("Already at version {$currentVersion}.\n");
-            return true;
-        }
 
         // unroll meta versions
         if ($toVersion === Migrator::VERSION_UP)
@@ -586,6 +581,13 @@ END;
         {
             $toVersion = $this->latestVersion();
             $this->logMessage("Resolved head to {$toVersion}\n", true);
+        }
+
+        // no-op detection
+        if ($currentVersion === $toVersion)
+        {
+            $this->logMessage("Already at version {$currentVersion}.\n");
+            return true;
         }
 
         // verify target version
