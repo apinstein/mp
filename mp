@@ -129,9 +129,10 @@ try {
 
             if ($targetVersion === NULL)
             {
-                $tagetVersion = Migrator::VERSION_HEAD;
+                $targetVersion = Migrator::VERSION_HEAD;
             }
-            else if ($targetVersion === 'redo')
+
+            if ($targetVersion === 'redo')
             {
                 $ok = $m->migrateToVersion(Migrator::VERSION_DOWN);
                 if ($ok)
