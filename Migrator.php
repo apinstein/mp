@@ -585,6 +585,7 @@ END;
         else if ($toVersion === Migrator::VERSION_HEAD)
         {
             $toVersion = $this->latestVersion();
+            $this->logMessage("Resolved head to {$toVersion}\n", true);
         }
 
         // verify target version
