@@ -47,6 +47,9 @@ $longopts[] = "dsn:";
 $shortopts .= "v";  // -v --verbose => verbose
 $longopts[] = "verbose";
 
+$shortopts .= "q";  // -q --quiet => supress all logging
+$longopts[] = "quiet";
+
 $shortopts .= "h";  // -h --help => print help
 $longopts[] = "help";
 
@@ -82,6 +85,10 @@ $opts = array();
 if (isset($cliOpts['v']))
 {
     $opts[Migrator::OPT_VERBOSE] = true;
+}
+if (isset($cliOpts['q']))
+{
+    $opts[Migrator::OPT_QUIET] = true;
 }
 if (isset($cliOpts['d']))
 {

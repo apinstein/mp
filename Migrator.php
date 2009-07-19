@@ -158,11 +158,14 @@ class Migrator
     const OPT_DELEGATE                   = 'delegate';
     const OPT_PDO_DSN                    = 'dsn';
     const OPT_VERBOSE                    = 'verbose';
+    const OPT_QUIET                      = 'quiet';
 
     const DIRECTION_UP                   = 'up';
     const DIRECTION_DOWN                 = 'down';
 
     const VERSION_ZERO                   = '0';
+    const VERSION_UP                     = 'up';
+    const VERSION_DOWN                   = 'down';
 
     /**
      * @var string The path to the directory where migrations are stored.
@@ -181,9 +184,13 @@ class Migrator
      */
     protected $dbCon;
     /**
-     * @var object MigratorDelegate
+     * @var boolean TRUE to set verbose logging
      */
     protected $verbose;
+    /**
+     * @var boolean TRUE to supress all logging.
+     */
+    protected $quiet;
     /**
      * @var array An array of all migrations installed for this app.
      */
@@ -203,6 +210,7 @@ class Migrator
                                 Migrator::OPT_DELEGATE              => NULL,
                                 Migrator::OPT_PDO_DSN               => NULL,
                                 Migrator::OPT_VERBOSE               => false,
+                                Migrator::OPT_QUIET                 => false,
                            ), $opts);
 
         // set up initial data
@@ -218,6 +226,7 @@ class Migrator
             $this->dbCon = new PDO($opts[Migrator::OPT_PDO_DSN]);
             $this->dbCon->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
         }
+        $this->quiet = $opts[Migrator::OPT_QUIET];
 
         // get info from delegate
         if ($this->delegate)
@@ -263,6 +272,11 @@ END;
         }
     }
 
+    public function getVersion()
+    {
+        return $this->getVersionProvider()->getVersion($this);
+    }
+
     protected function collectionMigrationsFiles()
     {
         $this->logMessage("Looking for migrations...\n", true);
@@ -282,6 +296,7 @@ END;
 
     public function logMessage($msg, $onlyIfVerbose = false)
     {
+        if ($this->quiet) return;
         if (!$this->verbose && $onlyIfVerbose) return;
         print $msg;
     }
@@ -420,6 +435,7 @@ class Migration{$dts} extends Migration
 }
 END;
         $filePath = $this->getMigrationsDirectory() . "/{$filename}";
+        if (file_exists($filePath)) throw new Exception("Migration {$dts} already exists! Aborting.");
         file_put_contents($filePath, $tpl);
         $this->logMessage("Created migration {$dts} at {$filePath}.\n");
     }
@@ -522,6 +538,16 @@ END;
         {
             $this->logMessage("Already at version {$currentVersion}.\n");
             return true;
+        }
+
+        // unroll meta versions
+        if ($toVersion === Migrator::VERSION_UP)
+        {
+            $toVersion = $this->findNextMigration($currentVersion, Migrator::DIRECTION_UP);
+        }
+        else if ($toVersion === Migrator::VERSION_DOWN)
+        {
+            $toVersion = $this->findNextMigration($currentVersion, Migrator::DIRECTION_DOWN);
         }
 
         // verify target version
