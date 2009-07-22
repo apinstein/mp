@@ -63,13 +63,8 @@ It also works well with ORMs that don't have an API to manage schemas, as you ca
 their DB connection for executing SQL migrations.
 
 ROADMAP / TODO
-- Write tests.
-  Test by making up munge 2 globals; count => X and incrementalCount => X. Tests do count=X, incrementalCount++. 1-5. This should make it
-  easy to be sure that version X was reached *and* it's run all migrations in order as expected.
 - Add long-option support. See http://cliframework.com/, looks pretty interesting.
 - Automatically walk up from pwd looking for migrations/ directory so you only have to be *under* your project root to run mp successfully.
-- Add support for meta-versions in -t [0|head|up|down|redo] to make it easy to move relative to current version.
 - Addition of a MigratorVersionProvider that stores the version in a database rather than on the filesystem.
 - Addition of mutex protection to prevent multiple migrations from running at the same time.
 - Addition of a generic schema manipulation API so you can use MP to manage your database without having to write SQL. Is this even necessary?
-
