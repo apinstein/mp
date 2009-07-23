@@ -591,6 +591,10 @@ END;
         else if ($toVersion === Migrator::VERSION_DOWN)
         {
             $toVersion = $this->findNextMigration($currentVersion, Migrator::DIRECTION_DOWN);
+            if (!$toVersion)
+            {
+                $toVersion = Migrator::VERSION_ZERO;
+            }
         }
         else if ($toVersion === Migrator::VERSION_HEAD)
         {
