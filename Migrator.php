@@ -231,7 +231,18 @@ class Migrator
         }
         if ($opts[Migrator::OPT_PDO_DSN])
         {
-            $this->dbCon = new PDO($opts[Migrator::OPT_PDO_DSN]);
+            // parse out user/pass from DSN
+            $matches = array();
+            $user = $pass = null;
+            if (preg_match('/user=([^;]+)(;|\z)/', $opts[Migrator::OPT_PDO_DSN], $matches))
+            {
+                $user = $matches[1];
+            }
+            if (preg_match('/password=([^;]+)(;|\z)/', $opts[Migrator::OPT_PDO_DSN], $matches))
+            {
+                $password = $matches[1];
+            }
+            $this->dbCon = new PDO($opts[Migrator::OPT_PDO_DSN], $user, $pass);
             $this->dbCon->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
         }
         $this->quiet = $opts[Migrator::OPT_QUIET];
@@ -311,6 +322,10 @@ END;
 
     public function getDbCon()
     {
+        if (!$this->dbCon)
+        {
+            throw new Exception("No DB connection available. Make sure to configure a DSN.");
+        }
         return $this->dbCon;
     }
  
