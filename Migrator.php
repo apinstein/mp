@@ -340,7 +340,10 @@ class Migrator
                               "This might indicate you are running mp on an install of a project that is already at a particular migration.\n" .
                               "Usually in this situation your first migration will fail since the tables for it will already exist, so it is normally harmless.\n" .
                               "However, it could be dangerous, so be very careful.\n" .
-                              "Please manually set the version of the current install to the proper migration version as appropriate.\n\n");
+                              "Please manually set the version of the current install to the proper migration version as appropriate.\n" .
+                              "It could also indicate you are running migrations for the first time on a newly created database.\n" .
+                              "\n\n"
+                              );
         }
     }
 
@@ -374,6 +377,15 @@ END;
 
     public function setVersion($v)
     {
+        // sanity check
+        if ($v !== Migrator::VERSION_ZERO)
+        {
+            try {
+                $versionIndex = $this->indexOfVersion($v);
+            } catch (MigrationUnknownVersionException $e) {
+                $this->logMessage("Cannot set the version to {$v} because it is not a known version.\n");
+            }
+        }
         return $this->getVersionProvider()->setVersion($this, $v);
     }
 

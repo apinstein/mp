@@ -44,7 +44,10 @@ $longopts[] = "clean";
 $shortopts .= "x:"; // -r --dsn <PDO DSN> => A PDO DSN
 $longopts[] = "dsn:";
 
-$shortopts .= "V:"; // -r --dsn <PDO DSN> => A PDO DSN
+$shortopts .= "f"; // -f --version-in-file => Use migrations/version.txt to store the version
+$longopts[] = "version-in-file";
+
+$shortopts .= "V:"; // -V --set-version <version> => A version #.
 $longopts[] = "set-version:";
 
 $shortopts .= "v";  // -v --verbose => verbose
@@ -67,9 +70,12 @@ migrate usage:
         -t --target <TargetVersion> or 0|up|down|head|redo
            * redo is an alias for down + up
         -r --clean Run clean first
-        -x --dsn <PDO DSN>
-        NOTE: if you supply a DSN then mp will automatically store the version number
-        in your database in a table named public.mp_version.
+  -x --dsn <PDO DSN>
+    NOTE: if you supply a DSN then mp will automatically store the version number
+    in your database in a table named public.mp_version.
+    If you do not supply a dsn then you will need to use the -f flag to tell mp
+    to use the filesystem for storage of the version.
+  -f --version-in-file Store the version on the filesystem.
   -v --verbose Verbose messages
   -q --quiet Supress all message
   -h --help Show this help
@@ -107,8 +113,18 @@ if (isset($cliOpts['d']))
 }
 if (isset($cliOpts['x']))
 {
+    // use DB
     $opts[Migrator::OPT_PDO_DSN] = $cliOpts['x'];
     $opts[Migrator::OPT_VERSION_PROVIDER] = new MigratorVersionProviderDB();
+}
+else
+{
+    // don't use DB
+    if (!isset($cliOpts['f']))
+    {
+        print "If you aren't supplying a DSN, you must use the -f/--version-in-file flag to force using a file for storag of versioning info.\nThis is done to prevent accidentially storing the version number in two places which could have disastrous consequences.\n";
+        exit(1);
+    }
 }
 try {
     $m = new Migrator($opts);
