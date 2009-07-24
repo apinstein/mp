@@ -15,8 +15,10 @@ By default you can implement your "clean" functionality in the MigrationClean::c
 
 public function clean($migrator)
 {
-    $migrator->getDbCon()->exec("drop database foo; create database foo;");`
+    $migrator->getDbCon()->exec("drop database foo;");
 }
+
+NOTE: If you prefer you can also create your baseline schema in clean. However, I usually set up the baseline schema in the first migration.
 
 Each migration for your application is defined by a class in the migrations directory.
 
@@ -50,8 +52,9 @@ $m->downgradeToVersion('20090716_212141');
 
 NOTE FOR SOURCE CONTROL
 If you use the file-based version tracking (ie migrations/version.txt) then make sure to have your source control
-system *ignore* that file. You definitely don't want yoru system to think it's been updated when you push new code
-to production but before you run your migrations!
+system *ignore* that file. You definitely don't want your system to think it's been updated when you push new code
+to production but before you run your migrations! Therefore it is recommended to use DB-based versioning wherever
+possible.
 
 INTEGRATION
 While MP can be operated purely via the migrate command line tool, it is also designed to be implemented into your
@@ -67,6 +70,5 @@ ROADMAP / TODO
   on a project on production.
 - Add long-option support. See http://cliframework.com/, looks pretty interesting.
 - Automatically walk up from pwd looking for migrations/ directory so you only have to be *under* your project root to run mp successfully.
-- Addition of a MigratorVersionProvider that stores the version in a database rather than on the filesystem.
 - Addition of mutex protection to prevent multiple migrations from running at the same time.
 - Addition of a generic schema manipulation API so you can use MP to manage your database without having to write SQL. Is this even necessary?

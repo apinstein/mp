@@ -44,6 +44,9 @@ $longopts[] = "clean";
 $shortopts .= "x:"; // -r --dsn <PDO DSN> => A PDO DSN
 $longopts[] = "dsn:";
 
+$shortopts .= "V:"; // -r --dsn <PDO DSN> => A PDO DSN
+$longopts[] = "set-version:";
+
 $shortopts .= "v";  // -v --verbose => verbose
 $longopts[] = "verbose";
 
@@ -65,10 +68,14 @@ migrate usage:
            * redo is an alias for down + up
         -r --clean Run clean first
         -x --dsn <PDO DSN>
+        NOTE: if you supply a DSN then mp will automatically store the version number
+        in your database in a table named public.mp_version.
   -v --verbose Verbose messages
   -q --quiet Supress all message
   -h --help Show this help
   -d --dir <MigrationDir>
+  -V --set-version <version> Set the current version number maintained by mp to be <version>.
+                             Does not run migrations; used to initialize mp for an existing system.
 
 NOTE: long options are not yet implemented.
 
@@ -101,10 +108,22 @@ if (isset($cliOpts['d']))
 if (isset($cliOpts['x']))
 {
     $opts[Migrator::OPT_PDO_DSN] = $cliOpts['x'];
+    $opts[Migrator::OPT_VERSION_PROVIDER] = new MigratorVersionProviderDB();
 }
-
 try {
     $m = new Migrator($opts);
+
+    if (isset($cliOpts['V']))
+    {
+        try {
+            $m->setVersion($cliOpts['V']);
+            exit(0);
+        } catch (Exception $e) {
+            print "Error setting version: " . $e->getMessage() . "\n";
+            exit(1);
+        }
+    }
+
     if (isset($cliOpts['r']))
     {
         $m->clean();

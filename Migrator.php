@@ -64,6 +64,71 @@ class MigratorVersionProviderFile implements MigratorVersionProvider
 }
 
 /**
+ * A MigratorVersionProvider that stores the current version in the database.
+ *
+ * NOTE: MigratorVersionProviderDB works with any database that supports INFORMATION SCHEMAS.
+ *
+ * By default this will store the version in the public.mp_version table.
+ */
+class MigratorVersionProviderDB implements MigratorVersionProvider
+{
+    const OPT_SCHEMA                = 'schema';
+    const OPT_VERSION_TABLE_NAME    = 'versionTableName';
+
+    protected $schema = NULL;
+    protected $versionTableName = NULL;
+
+    /**
+     * Create a new MigratorVersionProviderDB instance.
+     *
+     * @param array A hash with option values, see {@link MigratorVersionProviderDB::OPT_SCHEMA OPT_SCHEMA} and {@link MigratorVersionProviderDB::OPT_VERSION_TABLE_NAME}.
+     */
+    public function __construct($opts = array())
+    {
+        $opts = array_merge(array(
+                                MigratorVersionProviderDB::OPT_SCHEMA                => 'public',
+                                MigratorVersionProviderDB::OPT_VERSION_TABLE_NAME    => 'mp_version',
+                           ), $opts);
+
+        $this->schema = $opts[MigratorVersionProviderDB::OPT_SCHEMA];
+        $this->versionTableName = $opts[MigratorVersionProviderDB::OPT_VERSION_TABLE_NAME];
+    }
+
+    protected function initDB($migrator)
+    {
+        try {
+            $sql = "SELECT count(*) as version_table_count from information_schema.tables WHERE table_name = '{$this->versionTableName}';";
+            $row = $migrator->getDbCon()->query($sql)->fetch();
+            if ($row['version_table_count'] == 0)
+            {
+                $sql = "create table {$this->schema}.{$this->versionTableName} ( version text default '" . Migrator::VERSION_ZERO . "' );
+                        insert into {$this->schema}.{$this->versionTableName} (version) values (0);";
+                $migrator->getDbCon()->exec($sql);
+            }
+        } catch (Exception $e) {
+            throw new Exception("Error initializing DB at [{$sql}]: " . $e->getMessage());
+        }
+    }
+
+    public function setVersion($migrator, $v)
+    {
+        $this->initDB($migrator);
+
+        $sql = "update {$this->schema}.{$this->versionTableName} set version = " . $migrator->getDbCon()->quote($v) . ";";
+        $migrator->getDbCon()->exec($sql);
+    }
+
+    public function getVersion($migrator)
+    {
+        $this->initDB($migrator);
+
+        $sql = "select version from {$this->schema}.{$this->versionTableName} limit 1";
+        $row = $migrator->getDbCon()->query($sql)->fetch();
+        return $row['version'];
+    }
+}
+
+/**
  * Abstract base class for a migration.
  *
  * Each MP "migration" is implemented by calling functions in the corresponding concrete Migration subclass.
@@ -261,11 +326,12 @@ class Migrator
         }
 
         $this->initializeMigrationsDir();
-
-        // initialize migration state
-        $this->logMessage("MP - The PHP Migrator.\n");
-
         $this->collectMigrationFiles();
+
+        // say hello
+        $this->logMessage("MP - The PHP Migrator.\n");
+        $this->logMessage("Using version provider: " . get_class($this->getVersionProvider()) . "\n", true);
+        $this->logMessage("Found " . count($this->migrationFiles) . " migrations: " . print_r($this->migrationFiles, true), true);
     }
 
     protected function initializeMigrationsDir()
@@ -287,7 +353,7 @@ class MigrateClean
 }
 END;
             file_put_contents($migrationsDir . '/clean.php', $cleanTPL);
-            $this->getVersionProvider()->setVersion($this, Migrator::VERSION_ZERO);
+            $this->setVersion(Migrator::VERSION_ZERO);
         }
     }
 
@@ -296,9 +362,13 @@ END;
         return $this->getVersionProvider()->getVersion($this);
     }
 
+    public function setVersion($v)
+    {
+        return $this->getVersionProvider()->setVersion($this, $v);
+    }
+
     protected function collectMigrationFiles()
     {
-        $this->logMessage("Looking for migrations...\n", true);
         foreach (new DirectoryIterator($this->getMigrationsDirectory()) as $file) {
             if ($file->isDot()) continue;
             if ($file->isDir()) continue;
@@ -310,7 +380,6 @@ END;
             // sort in reverse chronological order
             natsort($this->migrationFiles);
         }
-        $this->logMessage("Found " . count($this->migrationFiles) . " migrations:" . print_r($this->migrationFiles, true), true);
     }
 
     public function logMessage($msg, $onlyIfVerbose = false)
@@ -526,12 +595,12 @@ END;
             $migration->$info['migrateF']($this);
             if ($direction === Migrator::DIRECTION_UP)
             {
-                $this->getVersionProvider()->setVersion($this, $migrationName);
+                $this->setVersion($migrationName);
             }
             else
             {
                 $downgradedToVersion = $this->findNextMigration($migrationName, Migrator::DIRECTION_DOWN);
-                $this->getVersionProvider()->setVersion($this, ($downgradedToVersion === NULL ? Migrator::VERSION_ZERO : $downgradedToVersion));
+                $this->setVersion(($downgradedToVersion === NULL ? Migrator::VERSION_ZERO : $downgradedToVersion));
             }
             return true;
         } catch (Exception $e) {
@@ -702,7 +771,7 @@ END;
         $this->logMessage("Cleaning...\n");
 
         // reset version number
-        $this->getVersionProvider()->setVersion($this, Migrator::VERSION_ZERO);
+        $this->setVersion(Migrator::VERSION_ZERO);
 
         // call delegate's clean
         if ($this->delegate && method_exists($this->delegate, 'clean'))
