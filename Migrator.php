@@ -332,6 +332,16 @@ class Migrator
         $this->logMessage("MP - The PHP Migrator.\n");
         $this->logMessage("Using version provider: " . get_class($this->getVersionProvider()) . "\n", true);
         $this->logMessage("Found " . count($this->migrationFiles) . " migrations: " . print_r($this->migrationFiles, true), true);
+
+        // warn if migrations exist but we are at version 0
+        if (count($this->migrationFiles) && $this->getVersion() === Migrator::VERSION_ZERO)
+        {
+            $this->logMessage("\n\nWARNING: There is at least one migration defined but the current install is marked as being at Version ZERO.\n" .
+                              "This might indicate you are running mp on an install of a project that is already at a particular migration.\n" .
+                              "Usually in this situation your first migration will fail since the tables for it will already exist, so it is normally harmless.\n" .
+                              "However, it could be dangerous, so be very careful.\n" .
+                              "Please manually set the version of the current install to the proper migration version as appropriate.\n\n");
+        }
     }
 
     protected function initializeMigrationsDir()
