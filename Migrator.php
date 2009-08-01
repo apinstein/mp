@@ -325,11 +325,12 @@ class Migrator
             }
         }
 
+        // say hello
+        $this->logMessage("MP - The PHP Migrator.\n");
+
         $this->initializeMigrationsDir();
         $this->collectMigrationFiles();
 
-        // say hello
-        $this->logMessage("MP - The PHP Migrator.\n");
         $this->logMessage("Using version provider: " . get_class($this->getVersionProvider()) . "\n", true);
         $this->logMessage("Found " . count($this->migrationFiles) . " migrations: " . print_r($this->migrationFiles, true), true);
 
@@ -353,6 +354,7 @@ class Migrator
         $migrationsDir = $this->getMigrationsDirectory();
         if (!file_exists($migrationsDir))
         {
+            $this->logMessage("No migrations dir found; initializing migrations directory at {$migrationsDir}.");
             mkdir($migrationsDir, 0777, true);
             $cleanTPL = <<<END
 <?php
