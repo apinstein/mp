@@ -135,14 +135,19 @@ try {
             $m->setVersion($cliOpts['V']);
             exit(0);
         } catch (Exception $e) {
-            print "Error setting version: " . $e->getMessage() . "\n";
+            print "Error setting version: [" . get_class($e) . "] " . $e->getMessage() . "\n";
             exit(1);
         }
     }
 
     if (isset($cliOpts['r']))
     {
-        $m->clean();
+        try {
+            $m->clean();
+        } catch (Exception $e) {
+            print "Error running clean: [" . get_class($e) . "] " . $e->getMessage() . "\n";
+            exit(1);
+        }
     }
 
     // are we migrating, cleaning, or creating?
@@ -184,6 +189,6 @@ try {
             break;
     }
 } catch (Exception $e) {
-    print "Error running migration: " . $e->getMessage() . "\n";
+    print "Error running migration: [" . get_class($e) . "] " . $e->getMessage() . "\n";
     exit(1);
 }
