@@ -29,23 +29,26 @@ require_once('Migrator.php');
 $longopts = array();
 $shortopts  = "";
 
-$shortopts .= "d:"; // -d --dir <MigrationsDir>
-$longopts[] = "dir";
-
-$shortopts .= "t:"; // -t --target <targetVersion> => Version to migrate to
-$longopts[] = "target:";
-
-$shortopts .= "c:"; // -c --command <command> => migrate, create, clean
-$longopts[] = "command:";
-
-$shortopts .= "r"; // -r --clean => run clean() first
-$longopts[] = "clean";
-
 $shortopts .= "x:"; // -r --dsn <PDO DSN> => A PDO DSN
 $longopts[] = "dsn:";
 
 $shortopts .= "f"; // -f --version-in-file => Use migrations/version.txt to store the version
 $longopts[] = "version-in-file";
+
+$shortopts .= "d:"; // -d --dir <MigrationsDir>
+$longopts[] = "dir";
+
+$shortopts .= "m::"; // -m --migrate <targetVersion> => Version to migrate to
+$longopts[] = "migrate::";
+
+$shortopts .= "r"; // -r --clean => run clean() first
+$longopts[] = "clean";
+
+$shortopts .= "n"; // -n --create => create a new migration
+$longopts[] = "create";
+
+$shortopts .= "s"; // -s --show-version => show the current version
+$longopts[] = "show-version";
 
 $shortopts .= "V:"; // -V --set-version <version> => A version #.
 $longopts[] = "set-version:";
@@ -59,42 +62,42 @@ $longopts[] = "quiet";
 $shortopts .= "h";  // -h --help => print help
 $longopts[] = "help";
 
-$cliOpts = @getopt($shortopts, $longopts);
+$cliOpts = getopt($shortopts, $longopts);
 
 if (isset($cliOpts['h']))
 {
     print <<<END
 migrate usage:
-  -c --command [migrate|create|clean]
-     migrate options:
-        -t --target <TargetVersion> or 0|up|down|head|redo
-           * redo is an alias for down + up
-        -r --clean Run clean first
+  VERSION STORAGE (must use one or the other)
   -x --dsn <PDO DSN>
     NOTE: if you supply a DSN then mp will automatically store the version number
     in your database in a table named public.mp_version.
     If you do not supply a dsn then you will need to use the -f flag to tell mp
     to use the filesystem for storage of the version.
   -f --version-in-file Store the version on the filesystem.
+
+  COMMANDS
+  -r --clean Run clean before doing anything else.
+  -n --create Create a new migration.
+  -s --show-version Shows the current version.
+  -V --set-version <version> Set the current version number maintained by mp to be <version>.
+                             Does not run migrations; used to initialize mp for an existing system.
+  -m --migrate <TargetVersion> or 0|up|down|head|redo
+     * redo is an alias for down + up
+
+  OPTIONS
   -v --verbose Verbose messages
   -q --quiet Supress all message
   -h --help Show this help
   -d --dir <MigrationDir>
-  -V --set-version <version> Set the current version number maintained by mp to be <version>.
-                             Does not run migrations; used to initialize mp for an existing system.
 
 NOTE: long options are not yet implemented.
+NOTE: on PHP 5.3 options should be passed as -mX or -m=X, not -m X, due to a bug in getopt.
 
-Default command is "migrate to latest".
+Default command is "show status".
 
 END;
     exit(0);
-}
-
-// default settings
-if (!isset($cliOpts['c']))
-{
-    $cliOpts['c'] = 'migrate';
 }
 
 // create migrator
@@ -126,13 +129,36 @@ else
         exit(1);
     }
 }
+// default command
+if (!(isset($cliOpts['r']) or isset($cliOpts['n']) or isset($cliOpts['s']) or isset($cliOpts['V']) or isset($cliOpts['m'])))
+{
+    $cliOpts['s'] = true;
+}
 try {
     $m = new Migrator($opts);
+
+    if (isset($cliOpts['r']))
+    {
+        $m->clean();
+    }
+
+    if (isset($cliOpts['n']))
+    {
+        $m->createMigration();
+        exit(0);
+    }
+
+    if (isset($cliOpts['s']))
+    {
+        print "Current version: " . $m->getVersion() . "\n";
+        exit(0);
+    }
 
     if (isset($cliOpts['V']))
     {
         try {
             $m->setVersion($cliOpts['V']);
+            print "Current version is now: " . $m->getVersion() . "\n";
             exit(0);
         } catch (Exception $e) {
             print "Error setting version: " . $e->getMessage() . "\n";
@@ -140,48 +166,27 @@ try {
         }
     }
 
-    if (isset($cliOpts['r']))
+    if (isset($cliOpts['m']))
     {
-        $m->clean();
-    }
-
-    // are we migrating, cleaning, or creating?
-    switch ($cliOpts['c']) {
-        case 'create':
-            $m->createMigration();
-            exit(0);
-            break;
-        case 'clean':
-            $m->clean();
-            exit(0);
-            break;
-        case 'migrate':
-            $targetVersion = NULL;
-            if (isset($cliOpts['t']))
+        $targetVersion = $cliOpts['m'];
+        if ($targetVersion === false)
+        {
+            $targetVersion = Migrator::VERSION_HEAD;
+        }
+        if ($targetVersion === 'redo')
+        {
+            $ok = $m->migrateToVersion(Migrator::VERSION_DOWN);
+            if ($ok)
             {
-                $targetVersion = $cliOpts['t'];
+                $ok = $m->migrateToVersion(Migrator::VERSION_UP);
             }
-
-            if ($targetVersion === NULL)
-            {
-                $targetVersion = Migrator::VERSION_HEAD;
-            }
-
-            if ($targetVersion === 'redo')
-            {
-                $ok = $m->migrateToVersion(Migrator::VERSION_DOWN);
-                if ($ok)
-                {
-                    $ok = $m->migrateToVersion(Migrator::VERSION_UP);
-                }
-                exit($ok === true ? 0 : 1);
-            }
-            else
-            {
-                $ok = $m->migrateToVersion($targetVersion);
-                exit($ok === true ? 0 : 1);
-            }
-            break;
+            exit($ok === true ? 0 : 1);
+        }
+        else
+        {
+            $ok = $m->migrateToVersion($targetVersion);
+            exit($ok === true ? 0 : 1);
+        }
     }
 } catch (Exception $e) {
     print "Error running migration: " . $e->getMessage() . "\n";

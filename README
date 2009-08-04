@@ -23,15 +23,16 @@ NOTE: If you prefer you can also create your baseline schema in clean. However, 
 Each migration for your application is defined by a class in the migrations directory.
 
 EXAMPLE CLI USAGE
-$ mp                            # Upgrade to latest revision
-                                # First run of MP will create your migrations directory,
-                                # create a stub clean script, and set the version to 0.
-$ mp -c create                  # create a new migration file
-$ mp -r                         # Reset to "clean" state then upgrade to latest revision
-$ mp -t 20090716_204830         # Migrate directly to revision 20090716_204830
+$ mp -f                         # Use file-based version tracking; If no args will just print version.
+                                # NOTE: First run of MP will create the migrations directory,
+                                        create a stub clean script, and set the version to 0.
+$ mp -f -n                      # Create a new migration; will write a stub file in migrations dir
+$ mp -f -m                      # Migrate to head (latest revision)
+$ mp -f -m20090716_204830       # Migrate to revision 20090716_204830
+$ mp -f -r                      # Reset to "clean" state (version 0)
 
 If you need DB access in your migrations, you can bootstrap them yourself, or, if you supply a dsn like so:
-$ mp -x 'pgsql:dbname=mydb;user=mydbuser;host=localhost'
+$ mp -x'pgsql:dbname=mydb;user=mydbuser;host=localhost'
 
 Then in your migrations you can do:
 
