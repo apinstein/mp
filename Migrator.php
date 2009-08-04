@@ -354,7 +354,7 @@ class Migrator
         $migrationsDir = $this->getMigrationsDirectory();
         if (!file_exists($migrationsDir))
         {
-            $this->logMessage("No migrations dir found; initializing migrations directory at {$migrationsDir}.");
+            $this->logMessage("No migrations dir found; initializing migrations directory at {$migrationsDir}.\n");
             mkdir($migrationsDir, 0777, true);
             $cleanTPL = <<<END
 <?php
