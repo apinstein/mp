@@ -588,6 +588,17 @@ END;
         return new $migrationClassName($this);
     }
 
+    public function listMigrations()
+    {
+        $v = Migrator::VERSION_ZERO;
+        while (true) {
+            $v = $this->findNextMigration($v, Migrator::DIRECTION_UP);
+            if ($v === NULL) break;
+            $m = $this->instantiateMigration($v);
+            $this->logMessage($v . ': ' . $m->description() . "\n");
+        }
+    }
+
     /**
      * Run the given migration in the specified direction.
      *

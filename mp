@@ -44,6 +44,9 @@ $longopts[] = "migrate::";
 $shortopts .= "r"; // -r --clean => run clean() first
 $longopts[] = "clean";
 
+$shortopts .= "l"; // -l --list => list all migrations
+$longopts[] = "list";
+
 $shortopts .= "n"; // -n --create => create a new migration
 $longopts[] = "create";
 
@@ -84,6 +87,7 @@ migrate usage:
                              Does not run migrations; used to initialize mp for an existing system.
   -m --migrate <TargetVersion> or 0|up|down|head|redo
      * redo is an alias for down + up
+  -l --list List all migrations in VERSION - DESCRIPTION format
 
   OPTIONS
   -v --verbose Verbose messages
@@ -130,7 +134,7 @@ else
     }
 }
 // default command
-if (!(isset($cliOpts['r']) or isset($cliOpts['n']) or isset($cliOpts['s']) or isset($cliOpts['V']) or isset($cliOpts['m'])))
+if (!(isset($cliOpts['r']) or isset($cliOpts['n']) or isset($cliOpts['s']) or isset($cliOpts['V']) or isset($cliOpts['m']) or isset($cliOpts['l'])))
 {
     $cliOpts['s'] = true;
 }
@@ -151,7 +155,11 @@ try {
     if (isset($cliOpts['s']))
     {
         print "Current version: " . $m->getVersion() . "\n";
-        exit(0);
+    }
+
+    if (isset($cliOpts['l']))
+    {
+        $m->listMigrations();
     }
 
     if (isset($cliOpts['V']))
