@@ -72,3 +72,4 @@ ROADMAP / TODO
 - Addition of mutex protection to prevent multiple migrations from running at the same time.
 - Addition of a generic schema manipulation API so you can use MP to manage your database without having to write SQL. Is this even necessary?
 - This looks like an interesting project to integrate with: http://www.liquibase.org/
+- Consider idea of adding the ability to link migrations to VCS/SCM tags -- sometimes a migration depends on a version of *code* as well as database structure!
