@@ -305,7 +305,7 @@ class Migrator
             }
             if (preg_match('/password=([^;]+)(;|\z)/', $opts[Migrator::OPT_PDO_DSN], $matches))
             {
-                $password = $matches[1];
+                $pass = $matches[1];
             }
             $this->dbCon = new PDO($opts[Migrator::OPT_PDO_DSN], $user, $pass);
             $this->dbCon->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
