@@ -1,4 +1,4 @@
-#!/usr/bin/php
+#!/usr/bin/env php
 <?php
 /* vim: set expandtab tabstop=4 shiftwidth=4 syntax=php: */
 /**
@@ -23,7 +23,13 @@
  * THE SOFTWARE.
  */
 
-require_once('Migrator.php');
+if (strpos('@php_bin@', '@php_bin') === 0) {  // not a pear install
+  $prefix = dirname(__FILE__);
+} else {
+  $prefix = 'mp';
+}
+require_once "{$prefix}/Migrator.php";
+
 
 // get options
 $longopts = array();
