@@ -2,7 +2,7 @@
 
 $spec = Pearfarm_PackageSpec::create(array(Pearfarm_PackageSpec::OPT_BASEDIR => dirname(__FILE__)))
             ->setName('mp')
-            ->setChannel('apinstein.dev.pearfarm.org')
+            ->setChannel('apinstein.pearfarm.org')
             ->setSummary('MP: Migrations for PHP')
             ->setDescription('A generic db migrations engine for PHP.')
             ->setReleaseVersion('1.0.0')

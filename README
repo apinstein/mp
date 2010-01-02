@@ -1,9 +1,12 @@
 MP: Migrations for PHP
-MP keeps your migrations in order.
 
 MP is a generic migrations architecture for managing migrations between versions of a web application.
 
 It can be used to migration database schemas as well as perform arbitary code during upgrades and downgrades.
+
+INSTALLATION
+
+pear install apinstein.pearfarm.org/mp
 
 HOW IT WORKS
 MP keeps track of the current version of your application. You can then request to migrate to any version.
