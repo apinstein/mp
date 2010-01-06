@@ -565,9 +565,15 @@ class Migration{$dts} extends Migration
 {
     public function up()
     {
+        \$sql = <<<SQL
+SQL;
+        \$this->migrator->getDbCon()->exec(\$sql);
     }
     public function down()
     {
+        \$sql = <<<SQL
+SQL;
+        \$this->migrator->getDbCon()->exec(\$sql);
     }
     public function description()
     {
