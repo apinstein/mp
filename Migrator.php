@@ -97,11 +97,11 @@ class MigratorVersionProviderDB implements MigratorVersionProvider
     protected function initDB($migrator)
     {
         try {
-            $sql = "SELECT count(*) as version_table_count from information_schema.tables WHERE table_name = '{$this->versionTableName}';";
+           $sql = "SELECT count(*) as version_table_count from information_schema.tables WHERE table_schema = '{$this->schema}' AND table_name = '{$this->versionTableName}';"; 
             $row = $migrator->getDbCon()->query($sql)->fetch();
             if ($row['version_table_count'] == 0)
             {
-                $sql = "create table {$this->schema}.{$this->versionTableName} ( version text default '" . Migrator::VERSION_ZERO . "' );
+                $sql = "create table {$this->schema}.{$this->versionTableName} ( version text );
                         insert into {$this->schema}.{$this->versionTableName} (version) values (0);";
                 $migrator->getDbCon()->exec($sql);
             }
