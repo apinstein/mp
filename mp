@@ -71,7 +71,15 @@ $longopts[] = "quiet";
 $shortopts .= "h";  // -h --help => print help
 $longopts[] = "help";
 
-$cliOpts = getopt($shortopts, $longopts);
+if (version_compare(phpversion(), "5.3.0", '>='))
+{
+    $cliOpts = getopt($shortopts, $longopts);
+}
+else
+{
+    print "NOTE: long options not supported on PHP versions before 5.3.\n";
+    $cliOpts = getopt($shortopts);
+}
 
 if (isset($cliOpts['h']))
 {
