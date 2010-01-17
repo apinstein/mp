@@ -5,7 +5,7 @@ $spec = Pearfarm_PackageSpec::create(array(Pearfarm_PackageSpec::OPT_BASEDIR => 
             ->setChannel('apinstein.pearfarm.org')
             ->setSummary('MP: Migrations for PHP')
             ->setDescription('A generic db migrations engine for PHP.')
-            ->setReleaseVersion('1.0.2')
+            ->setReleaseVersion('1.0.3')
             ->setReleaseStability('stable')
             ->setApiVersion('1.0.0')
             ->setApiStability('stable')
