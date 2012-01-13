@@ -47,6 +47,9 @@ $longopts[] = "dir";
 $shortopts .= "m::"; // -m --migrate <targetVersion> => Version to migrate to
 $longopts[] = "migrate::";
 
+$shortopts .= "g"; // -g --git-post-checkout-hook-mode Checks migrations based on the branch before and after the last checkout.
+$longopts[] = "git-post-checkout-hook-mode";
+
 $shortopts .= "r"; // -r --clean => run clean() first
 $longopts[] = "clean";
 
@@ -101,6 +104,9 @@ migrate usage:
                              Does not run migrations; used to initialize mp for an existing system.
   -m --migrate <TargetVersion> or 0|up|down|head|redo
      * redo is an alias for down + up
+  -g --git-switch-branches <from> Downgrades migrations needed to get to from..HEAD,
+                                  then runs migrations up to HEAD.
+                                  Optionally allows you to re-sequence migrations.
   -l --list List all migrations in VERSION - DESCRIPTION format
 
   OPTIONS
@@ -209,6 +215,13 @@ try {
             $ok = $m->migrateToVersion($targetVersion);
             exit($ok === true ? 0 : 1);
         }
+    }
+    else if (isset($cliOpts['g']))  // git branch switching
+    {
+        require_once "{$prefix}/VCSHelper.php";
+        VCSHelper::create(new VCSHelper_git)
+                   ->run($m)
+                   ;
     }
 } catch (Exception $e) {
     print "Error running migration: " . $e->getMessage() . "\n";
