@@ -1,0 +1,19 @@
+{
+    "name": "apinstein/mp",
+    "type": "library",
+    "description": "Migrations manager.",
+    "keywords": ["migrations","database"],
+    "homepage": "http://github.com/apinstein/mp",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Alan Pinstein",
+            "email": "apinstein@mac.com",
+            "role": "Developer"
+        }
+    ],
+    "require": {
+        "php": ">=5.2.0"
+    },
+    "bin": ["mp"]
+}
