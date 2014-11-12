@@ -2,12 +2,6 @@
 
 require_once 'Migrator.php';
 
-define('TEST_MIGRATIONS_DIR', './test/migrations');
-
-$testMigrationNumber = 0;
-$testMigrationIncrementedNumber = 0;
-$testMigrationHasRunCounter = 0;
-
 class MigratorTest extends PHPUnit_Framework_TestCase
 {
     protected $migrator;
@@ -15,15 +9,11 @@ class MigratorTest extends PHPUnit_Framework_TestCase
     function setup()
     {
         $opts = array(
-            Migrator::OPT_MIGRATIONS_DIR => TEST_MIGRATIONS_DIR,
-            Migrator::OPT_QUIET => true,
+            Migrator::OPT_MIGRATIONS_DIR    => __DIR__ . '/migrations',
+            Migrator::OPT_QUIET             => true,
         );
         $this->migrator = new Migrator($opts);
         $this->migrator->getVersionProvider()->setVersion($this->migrator, 0);  // hard-reset to version 0
-
-        global $testMigrationNumber, $testMigrationIncrementedNumber, $testMigrationHasRunCounter;
-        $testMigrationNumber = 0;
-        $testMigrationIncrementedNumber = 0;
     }
 
     function testFreshMigrationsStartAtVersionZero()
@@ -31,16 +21,14 @@ class MigratorTest extends PHPUnit_Framework_TestCase
         $this->assertEquals(Migrator::VERSION_ZERO, $this->migrator->getVersion());
     }
 
-    private function assertAtVersion($version, $counter, $numMigrationsRun = NULL)
+    private function assertAtVersion($version)
     {
-        global $testMigrationNumber, $testMigrationIncrementedNumber, $testMigrationHasRunCounter;
-        $this->assertEquals($version, $this->migrator->getVersion(), "At wrong version #");
-        $this->assertEquals($counter, $testMigrationNumber, "testMigrationNumber wrong");
-        $this->assertEquals($counter, $testMigrationIncrementedNumber, "testMigrationIncrementedNumber wrong");
-        if ($numMigrationsRun !== NULL)
-        {
-            $this->assertEquals($numMigrationsRun, $testMigrationHasRunCounter);
-        }
+        $this->assertEquals($version, $this->migrator->getVersion(), "At wrong version.");
+    }
+
+    private function assertAuditTrail($expectedAuditTrail)
+    {
+        $this->assertEquals($expectedAuditTrail, $this->migrator->getMigrationAuditTrail());
     }
 
     function testLatestVersion()
@@ -51,89 +39,119 @@ class MigratorTest extends PHPUnit_Framework_TestCase
     function testCleanGoesToVersionZero()
     {
         $this->migrator->clean();
-        $this->assertAtVersion(Migrator::VERSION_ZERO, 0, 0);
+        $this->assertAtVersion(Migrator::VERSION_ZERO);
+        $this->assertAuditTrail(array());
     }
 
     function testMigratingToVersionZero()
     {
-        $this->migrator->migrateToVersion(Migrator::VERSION_HEAD);
+        $this->migrator->getVersionProvider()->setVersion($this->migrator, '20090719_000005');
         $this->migrator->migrateToVersion(Migrator::VERSION_ZERO);
-        $this->assertAtVersion(Migrator::VERSION_ZERO, 0, 10);
+        $this->assertAtVersion(Migrator::VERSION_ZERO);
+        $this->assertAuditTrail(array(
+            '20090719_000005:down',
+            '20090719_000003:down',
+            '20090719_000004:down',
+            '20090719_000002:down',
+            '20090719_000001:down',
+            ));
     }
 
     function testMigratingToHead()
     {
         $this->migrator->migrateToVersion(Migrator::VERSION_HEAD);
-        $this->assertAtVersion('20090719_000005', 5, 5);
+        $this->assertAtVersion('20090719_000005');
+        $this->assertAuditTrail(array(
+            '20090719_000001:up',
+            '20090719_000002:up',
+            '20090719_000004:up',
+            '20090719_000003:up',
+            '20090719_000005:up',
+        ));
     }
 
     function testMigrateUp()
     {
         // mock out migrator; make sure UP calls migrate to appropriate version
-        $this->migrator->migrateToVersion('20090719_000002');
-//        $mock = $this->getMock($this->migrator);
-//        $mock->expects($this->once())
-//                        ->method('migrateToVersion')
-//                        ->with($this->equalTo('20090719_000003'));
-//        $this->migrator->migrateToVersion(Migrator::VERSION_UP);
+        $this->migrator->getVersionProvider()->setVersion($this->migrator, '20090719_000001');
 
-          global $testMigrationIncrementedNumber;
-          $expectedMigrationIncrementedNumber = $testMigrationIncrementedNumber + 1;
-          $this->migrator->migrateToVersion(Migrator::VERSION_UP);
-          $this->assertAtVersion('20090719_000003', 3, $expectedMigrationIncrementedNumber);
+        $this->migrator->migrateToVersion(Migrator::VERSION_UP);
+        $this->assertAtVersion('20090719_000002');
+        $this->assertAuditTrail(array(
+            '20090719_000002:up'
+        ));
     }
 
     function testMigrateDown()
     {
-        // mock out migrator; make sure UP calls migrate to appropriate version
-        $this->migrator->migrateToVersion('20090719_000002');
-//        $mock = $this->getMock($this->migrator);
-//        $mock->expects($this->once())
-//                        ->method('migrateToVersion')
-//                        ->with($this->equalTo('20090719_000001'));
-//        $this->migrator->migrateToVersion(Migrator::VERSION_DOWN);
-
-        global $testMigrationIncrementedNumber;
-        $expectedMigrationIncrementedNumber = $testMigrationIncrementedNumber + 1;
+        $this->migrator->getVersionProvider()->setVersion($this->migrator, '20090719_000002');
         $this->migrator->migrateToVersion(Migrator::VERSION_DOWN);
-        $this->assertAtVersion('20090719_000001', 1, $expectedMigrationIncrementedNumber);
+        $this->assertAtVersion('20090719_000001');
+        $this->assertAuditTrail(array(
+            '20090719_000002:down'
+        ));
     }
 
     function testMigratingToCurrentVersionRunsNoMigrations()
     {
+        $this->migrator->getVersionProvider()->setVersion($this->migrator, '20090719_000002');
         $this->migrator->migrateToVersion('20090719_000002');
-        global $testMigrationIncrementedNumber;
-        $this->migrator->migrateToVersion('20090719_000002');
-        $this->assertAtVersion('20090719_000002', 2, $testMigrationIncrementedNumber);
+        $this->assertAtVersion('20090719_000002');
+        $this->assertAuditTrail(array());
     }
 
     function testMigrateToVersion1()
     {
         $this->migrator->migrateToVersion('20090719_000001');
-        $this->assertAtVersion('20090719_000001', 1, 1);
+        $this->assertAtVersion('20090719_000001');
+        $this->assertAuditTrail(array(
+            '20090719_000001:up',
+        ));
     }
 
     function testMigrateToVersion2()
     {
         $this->migrator->migrateToVersion('20090719_000002');
-        $this->assertAtVersion('20090719_000002', 2, 2);
-    }
-
-    function testMigrateToVersion3()
-    {
-        $this->migrator->migrateToVersion('20090719_000003');
-        $this->assertAtVersion('20090719_000003', 3, 3);
+        $this->assertAtVersion('20090719_000002');
+        $this->assertAuditTrail(array(
+            '20090719_000001:up',
+            '20090719_000002:up',
+        ));
     }
 
     function testMigrateToVersion4()
     {
         $this->migrator->migrateToVersion('20090719_000004');
-        $this->assertAtVersion('20090719_000004', 4, 4);
+        $this->assertAtVersion('20090719_000004');
+        $this->assertAuditTrail(array(
+            '20090719_000001:up',
+            '20090719_000002:up',
+            '20090719_000004:up',
+        ));
+    }
+
+    function testMigrateToVersion3()
+    {
+        $this->migrator->migrateToVersion('20090719_000003');
+        $this->assertAtVersion('20090719_000003');
+        $this->assertAuditTrail(array(
+            '20090719_000001:up',
+            '20090719_000002:up',
+            '20090719_000004:up',
+            '20090719_000003:up',
+        ));
     }
 
     function testMigrateToVersion5()
     {
         $this->migrator->migrateToVersion('20090719_000005');
-        $this->assertAtVersion('20090719_000005', 5, 5);
+        $this->assertAtVersion('20090719_000005');
+        $this->assertAuditTrail(array(
+            '20090719_000001:up',
+            '20090719_000002:up',
+            '20090719_000004:up',
+            '20090719_000003:up',
+            '20090719_000005:up',
+        ));
     }
 }

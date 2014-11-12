@@ -271,6 +271,10 @@ class Migrator
      * @var array An array of all migrations installed for this app.
      */
     protected $migrationList = array();
+    /**
+     * @var array An audit trail of the migrations applied during this invocation.
+     */
+    protected $migrationAuditTrail = array();
 
     /**
      * Create a migrator instance.
@@ -358,6 +362,11 @@ class Migrator
                               "\n\n"
                               );
         }
+    }
+
+    public function getMigrationAuditTrail()
+    {
+        return $this->migrationAuditTrail;
     }
 
     protected function initializeMigrationsDir()
@@ -686,6 +695,8 @@ END;
      */
     public function runMigration($migrationName, $direction)
     {
+        $this->migrationAuditTrail[] = "{$migrationName}:{$direction}";
+
         if ($direction === Migrator::DIRECTION_UP)
         {
             $info = array(
