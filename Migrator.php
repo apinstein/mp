@@ -3,8 +3,8 @@
 /**
  * @package Migrator
  * @copyright Copyright (c) 2005 Alan Pinstein. All Rights Reserved.
- * @author Alan Pinstein <apinstein@mac.com>                        
- * 
+ * @author Alan Pinstein <apinstein@mac.com>
+ *
  * Copyright (c) 2009 Alan Pinstein <apinstein@mac.com>
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -97,7 +97,7 @@ class MigratorVersionProviderDB implements MigratorVersionProvider
     protected function initDB($migrator)
     {
         try {
-            $sql = "SELECT count(*) as version_table_count from information_schema.tables WHERE table_schema = '{$this->schema}' AND table_name = '{$this->versionTableName}';"; 
+            $sql = "SELECT count(*) as version_table_count from information_schema.tables WHERE table_schema = '{$this->schema}' AND table_name = '{$this->versionTableName}';";
             $row = $migrator->getDbCon()->query($sql)->fetch();
             if ($row['version_table_count'] == 0)
             {
@@ -198,7 +198,7 @@ class MigrationUnknownVersionException extends Exception {}
 abstract class MigratorDelegate
 {
     /**
-     * You can provide a custom {@link MigratorVersionProvider} 
+     * You can provide a custom {@link MigratorVersionProvider}
      *
      * @return object MigratorVersionProvider
      */
@@ -391,19 +391,64 @@ END;
         return $this->getVersionProvider()->setVersion($this, $v);
     }
 
+    /**
+     * @return array An array of the migrations which are manifested by the migrations.json file.
+     */
+    protected function getMigrationsManifest()
+    {
+        $manifestFile = "{$this->getMigrationsDirectory()}/migrations.json";
+        if (!file_exists($manifestFile)) return NULL;
+
+        $data = file_get_contents($manifestFile);
+        if ($data === false) throw new Exception("Error reading migrations.json manifest file.");
+
+        $migrationList = json_decode($data, true);
+        if (!$migrationList) throw new Exception("Error decoding migrations.json manifest.");
+
+        return $migrationList;
+    }
+
+    protected function createDefaultMigrationsManifest($migrationList)
+    {
+        // sort in reverse chronological order
+        natsort($migrationList);
+        $migrationList = array_values($migrationList);
+
+        // OPTIONAL?
+        //$manifestFile = "{$this->getMigrationsDirectory()}/migrations.json";
+        //$ok = file_put_contents($manifestFile, json_encode($migrationList));
+        //if (!$ok) throw new Exception("Error creating {$manifestFile}.");
+
+        return $migrationList;
+    }
+
     protected function collectMigrationFiles()
     {
+        $migrationFileList = array();
         foreach (new DirectoryIterator($this->getMigrationsDirectory()) as $file) {
             if ($file->isDot()) continue;
             if ($file->isDir()) continue;
             $matches = array();
             if (preg_match('/^([0-9]{8}_[0-9]{6}).php$/', $file->getFilename(), $matches))
             {
-                $this->migrationFiles[$matches[1]] = $file->getFilename();
+                $migrationFileList[$matches[1]] = $file->getFilename();
             }
-            // sort in reverse chronological order
-            natsort($this->migrationFiles);
         }
+
+        $manifestedMigrations = $this->getMigrationsManifest();
+        if (!$manifestedMigrations)
+        {
+            // bootstrap upgrade file
+            $manifestedMigrations = $this->createDefaultMigrationsManifest(array_keys($migrationFileList));
+        }
+
+        // sort migrationFileList by manifested keys
+        $sortedMigrationFileList = array();
+        foreach ($manifestedMigrations as $m) {
+            $sortedMigrationFileList[$m] = $migrationFileList[$m];
+        }
+
+        $this->migrationFiles = $sortedMigrationFileList;
     }
 
     public function logMessage($msg, $onlyIfVerbose = false)
@@ -421,7 +466,7 @@ END;
         }
         return $this->dbCon;
     }
- 
+
     public function setDelegate($d)
     {
         if (!is_object($d)) throw new Exception("setDelegate requires an object instance.");
