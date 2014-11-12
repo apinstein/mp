@@ -192,8 +192,10 @@ abstract class Migration
 /**
  * Exception that should be thrown by a {@link object Migration Migration's} down() method if the migration is irreversible (ie a one-way migration).
  */
-class MigrationOneWayException extends Exception {}
-class MigrationUnknownVersionException extends Exception {}
+class MigrationOneWayException              extends Exception {}
+class MigrationUnknownVersionException      extends Exception {}
+class MigrationNoManifestException          extends Exception {}
+class MigrationManifestMismatchException    extends Exception {}
 
 abstract class MigratorDelegate
 {
@@ -231,6 +233,7 @@ class Migrator
     const OPT_PDO_DSN                    = 'dsn';
     const OPT_VERBOSE                    = 'verbose';
     const OPT_QUIET                      = 'quiet';
+    const OPT_OFFER_MANIFEST_UPGRADE     = 'offerUpgradeToCreateManifest';
 
     const DIRECTION_UP                   = 'up';
     const DIRECTION_DOWN                 = 'down';
@@ -267,7 +270,7 @@ class Migrator
     /**
      * @var array An array of all migrations installed for this app.
      */
-    protected $migrationFiles = array();
+    protected $migrationList = array();
 
     /**
      * Create a migrator instance.
@@ -278,12 +281,13 @@ class Migrator
     public function __construct($opts = array())
     {
         $opts = array_merge(array(
-                                Migrator::OPT_MIGRATIONS_DIR        => './migrations',
-                                Migrator::OPT_VERSION_PROVIDER      => new MigratorVersionProviderFile($this),
-                                Migrator::OPT_DELEGATE              => NULL,
-                                Migrator::OPT_PDO_DSN               => NULL,
-                                Migrator::OPT_VERBOSE               => false,
-                                Migrator::OPT_QUIET                 => false,
+                                Migrator::OPT_MIGRATIONS_DIR            => './migrations',
+                                Migrator::OPT_VERSION_PROVIDER          => new MigratorVersionProviderFile($this),
+                                Migrator::OPT_DELEGATE                  => NULL,
+                                Migrator::OPT_PDO_DSN                   => NULL,
+                                Migrator::OPT_VERBOSE                   => false,
+                                Migrator::OPT_QUIET                     => false,
+                                Migrator::OPT_OFFER_MANIFEST_UPGRADE    => false,
                            ), $opts);
 
         // set up initial data
@@ -329,13 +333,21 @@ class Migrator
         $this->logMessage("MP - The PHP Migrator.\n");
 
         $this->initializeMigrationsDir();
-        $this->collectMigrationFiles();
+        $migrationFileList = $this->collectMigrationFiles();
+
+        if (!file_exists($this->getMigrationsManifestFile()) && $opts[Migrator::OPT_OFFER_MANIFEST_UPGRADE])
+        {
+            $this->logMessage("MP v1.0.4 now uses a migrations.json manifest file to determine order of migrations. We have generated one for you; be sure to check {$this->getMigrationsManifestFile()} into your version control.\n");
+            $this->upgradeToMigrationsManifest($migrationFileList);
+        }
+
+        $this->generateMigrationList($migrationFileList);
 
         $this->logMessage("Using version provider: " . get_class($this->getVersionProvider()) . "\n", true);
-        $this->logMessage("Found " . count($this->migrationFiles) . " migrations: " . print_r($this->migrationFiles, true), true);
+        $this->logMessage("Found " . count($this->migrationList) . " migrations: " . print_r($this->migrationList, true), true);
 
         // warn if migrations exist but we are at version 0
-        if (count($this->migrationFiles) && $this->getVersion() === Migrator::VERSION_ZERO)
+        if (count($this->migrationList) && $this->getVersion() === Migrator::VERSION_ZERO)
         {
             $this->logMessage("\n\nWARNING: There is at least one migration defined but the current install is marked as being at Version ZERO.\n" .
                               "This might indicate you are running mp on an install of a project that is already at a particular migration.\n" .
@@ -391,13 +403,18 @@ END;
         return $this->getVersionProvider()->setVersion($this, $v);
     }
 
+    protected function getMigrationsManifestFile()
+    {
+        return "{$this->getMigrationsDirectory()}/migrations.json";
+    }
+
     /**
      * @return array An array of the migrations which are manifested by the migrations.json file.
      */
     protected function getMigrationsManifest()
     {
-        $manifestFile = "{$this->getMigrationsDirectory()}/migrations.json";
-        if (!file_exists($manifestFile)) return NULL;
+        $manifestFile = $this->getMigrationsManifestFile();
+        if (!file_exists($manifestFile)) throw new MigrationNoManifestException("No manifest file found: {$manifestFile}");
 
         $data = file_get_contents($manifestFile);
         if ($data === false) throw new Exception("Error reading migrations.json manifest file.");
@@ -408,18 +425,25 @@ END;
         return $migrationList;
     }
 
-    protected function createDefaultMigrationsManifest($migrationList)
+    protected function upgradeToMigrationsManifest($migrationList)
     {
-        // sort in reverse chronological order
+        $manifestFile = $this->getMigrationsManifestFile();
+        if (file_exists($manifestFile))
+        {
+            return;
+        }
+
+        $migrationList = array_keys($migrationList);
+        // Legacy way way to sort in reverse chronological order via natsort
         natsort($migrationList);
         $migrationList = array_values($migrationList);
 
-        // OPTIONAL?
-        //$manifestFile = "{$this->getMigrationsDirectory()}/migrations.json";
-        //$ok = file_put_contents($manifestFile, json_encode($migrationList));
-        //if (!$ok) throw new Exception("Error creating {$manifestFile}.");
-
-        return $migrationList;
+        // upgrade to manifest-based migration ordering
+        $indent = "  ";
+        $eol = PHP_EOL;
+        $quote = '"';
+        $ok = file_put_contents($manifestFile, "[{$eol}{$indent}{$quote}" . join("{$quote},{$eol}{$indent}{$quote}", $migrationList) . "{$quote}{$eol}]{$eol}");
+        if (!$ok) throw new Exception("Error creating {$manifestFile}.");
     }
 
     protected function collectMigrationFiles()
@@ -435,12 +459,15 @@ END;
             }
         }
 
+        return $migrationFileList;
+    }
+
+    protected function generateMigrationList($migrationFileList)
+    {
         $manifestedMigrations = $this->getMigrationsManifest();
-        if (!$manifestedMigrations)
-        {
-            // bootstrap upgrade file
-            $manifestedMigrations = $this->createDefaultMigrationsManifest(array_keys($migrationFileList));
-        }
+        $migrationFileCount = count($migrationFileList);
+        $migrationManifestCount = count($manifestedMigrations);
+        if ($migrationManifestCount !== $migrationFileCount) throw new MigrationManifestMismatchException("There are {$migrationManifestCount} migrations manifested, but there are {$migrationFileCount} migration files. Please verify your migrations.json manifest.");
 
         // sort migrationFileList by manifested keys
         $sortedMigrationFileList = array();
@@ -448,7 +475,7 @@ END;
             $sortedMigrationFileList[$m] = $migrationFileList[$m];
         }
 
-        $this->migrationFiles = $sortedMigrationFileList;
+        $this->migrationList = $sortedMigrationFileList;
     }
 
     public function logMessage($msg, $onlyIfVerbose = false)
@@ -501,12 +528,12 @@ END;
     }
 
     /**
-     * Get the index of the passed version number in the migrationFiles array.
+     * Get the index of the passed version number in the migrationList array.
      *
      * NOTE: This function does NOT accept the Migrator::VERSION_* constants.
      *
      * @param string The version number to look for
-     * @return integer The index of the migration in the migrationFiles array.
+     * @return integer The index of the migration in the migrationList array.
      * @throws object MigrationUnknownVersionException
      */
     protected function indexOfVersion($findVersion)
@@ -514,7 +541,7 @@ END;
         // normal logic for when there is 1+ migrations and we aren't at VERSION_ZERO
         $foundCurrent = false;
         $currentIndex = 0;
-        foreach (array_keys($this->migrationFiles) as $version) {
+        foreach (array_keys($this->migrationList) as $version) {
             if ($version === $findVersion)
             {
                 $foundCurrent = true;
@@ -536,12 +563,12 @@ END;
      */
     public function latestVersion()
     {
-        if (empty($this->migrationFiles))
+        if (empty($this->migrationList))
         {
             $this->logMessage("No migrations available.\n");
             return true;
         }
-        $lastMigration = array_pop(array_keys($this->migrationFiles));
+        $lastMigration = array_pop(array_keys($this->migrationList));
         return $lastMigration;
     }
 
@@ -556,9 +583,9 @@ END;
     protected function findNextMigration($currentMigration, $direction)
     {
         // special case when no migrations exist
-        if (count($this->migrationFiles) === 0) return NULL;
+        if (count($this->migrationList) === 0) return NULL;
 
-        $migrationVersions = array_keys($this->migrationFiles);
+        $migrationVersions = array_keys($this->migrationList);
 
         // special case when current == VERSION_ZERO
         if ($currentMigration === Migrator::VERSION_ZERO)
@@ -634,7 +661,7 @@ END;
 
     private function instantiateMigration($migrationName)
     {
-        require_once($this->getMigrationsDirectory() . "/" . $this->migrationFiles[$migrationName]);
+        require_once($this->getMigrationsDirectory() . "/" . $this->migrationList[$migrationName]);
         $migrationClassName = "Migration{$migrationName}";
         return new $migrationClassName($this);
     }
@@ -789,7 +816,7 @@ END;
         {
             $direction = Migrator::DIRECTION_UP;
         }
-        else if ($currentVersion === array_pop(array_keys($this->migrationFiles)))
+        else if ($currentVersion === array_pop(array_keys($this->migrationList)))
         {
             $direction = Migrator::DIRECTION_DOWN;
         }

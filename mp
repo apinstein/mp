@@ -153,6 +153,7 @@ if (!(isset($cliOpts['r']) or isset($cliOpts['n']) or isset($cliOpts['s']) or is
     $cliOpts['s'] = true;
 }
 try {
+    $opts[Migrator::OPT_OFFER_MANIFEST_UPGRADE] = true;
     $m = new Migrator($opts);
 
     if (isset($cliOpts['r']))
