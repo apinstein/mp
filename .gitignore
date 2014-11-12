@@ -3,3 +3,4 @@ test/migrations/version.txt
 *.swp
 mp-*.tgz
 package.xml
+vendor/
