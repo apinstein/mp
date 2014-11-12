@@ -448,11 +448,18 @@ END;
         $migrationList = array_values($migrationList);
 
         // upgrade to manifest-based migration ordering
+        $this->writeMigrationsManifest($migrationList);
+    }
+
+    protected function writeMigrationsManifest($migrationList)
+    {
+        $manifestFile = $this->getMigrationsManifestFile();
+
         $indent = "  ";
         $eol = PHP_EOL;
         $quote = '"';
         $ok = file_put_contents($manifestFile, "[{$eol}{$indent}{$quote}" . join("{$quote},{$eol}{$indent}{$quote}", $migrationList) . "{$quote}{$eol}]{$eol}");
-        if (!$ok) throw new Exception("Error creating {$manifestFile}.");
+        if (!$ok) throw new Exception("Error writing {$manifestFile}.");
     }
 
     protected function collectMigrationFiles()
@@ -665,7 +672,12 @@ END;
         $filePath = $this->getMigrationsDirectory() . "/{$filename}";
         if (file_exists($filePath)) throw new Exception("Migration {$dts} already exists! Aborting.");
         file_put_contents($filePath, $tpl);
-        $this->logMessage("Created migration {$dts} at {$filePath}.\n");
+
+        // add migrations.json
+        $migrationList = $this->getMigrationsManifest();
+        $migrationList[] = $dts;
+        $this->writeMigrationsManifest($migrationList);
+        $this->logMessage("Created migration {$dts} at {$filePath} and added it to the end of migrations.json.\n");
     }
 
     private function instantiateMigration($migrationName)
