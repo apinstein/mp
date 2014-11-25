@@ -483,7 +483,33 @@ END;
         $manifestedMigrations = $this->getMigrationsManifest();
         $migrationFileCount = count($migrationFileList);
         $migrationManifestCount = count($manifestedMigrations);
-        if ($migrationManifestCount !== $migrationFileCount) throw new MigrationManifestMismatchException("There are {$migrationManifestCount} migrations manifested, but there are {$migrationFileCount} migration files. Please verify your migrations.json manifest.");
+        if ($migrationManifestCount !== $migrationFileCount)
+        {
+            $setOfManifestedMigrations = $manifestedMigrations;
+            $setOfMigrationFiles = array_keys($migrationFileList);
+            $manifestedButNoFile = array_diff($setOfManifestedMigrations, $setOfMigrationFiles);
+            $fileButNoManifest = array_diff($setOfMigrationFiles, $setOfManifestedMigrations);
+            $msgManifestedButNoFile = "All manifested migrations have files.";
+            if (count($manifestedButNoFile))
+            {
+                $msgManifestedButNoFile = "The following migrations are manifested but have no corresponding file: " . PHP_EOL . join(PHP_EOL, $manifestedButNoFile);
+            }
+            $msgFileButNoManifest = "All migration files have been manifested.";
+            if (count($fileButNoManifest))
+            {
+                $msgFileButNoManifest = "The following migrations have migration files but have not been manifested: " . PHP_EOL . join(PHP_EOL, $fileButNoManifest);
+            }
+            $msg =<<<MSG
+There are {$migrationManifestCount} migrations manifested, but there are {$migrationFileCount} migration files.
+
+{$msgFileButNoManifest}
+
+{$msgManifestedButNoFile}
+
+Please verify your migrations.json manifest.
+MSG;
+            throw new MigrationManifestMismatchException($msg);
+        }
 
         // sort migrationFileList by manifested keys
         $sortedMigrationFileList = array();
