@@ -754,7 +754,8 @@ END;
         $migration = $this->instantiateMigration($migrationName);
         $this->logMessage("Running {$migrationName} {$info['actionName']}: " . $migration->description() . "\n", false);
         try {
-            $migration->$info['migrateF']($this);
+            $upOrDown = $info['migrateF'];
+            $migration->$upOrDown($this);
             if ($direction === Migrator::DIRECTION_UP)
             {
                 $this->setVersion($migrationName);
