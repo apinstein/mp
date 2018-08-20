@@ -4,3 +4,4 @@ test/migrations/version.txt
 mp-*.tgz
 package.xml
 vendor/
+composer.lock

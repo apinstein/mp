@@ -1,8 +1,10 @@
 <?php
 
-require_once 'Migrator.php';
+require_once __DIR__ . '/../Migrator.php';
 
-class MigratorTest extends PHPUnit_Framework_TestCase
+use PHPUnit\Framework\TestCase;
+
+class MigratorTest extends TestCase
 {
     protected $migrator;
 

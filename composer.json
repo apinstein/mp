@@ -13,10 +13,10 @@
         }
     ],
     "require": {
-        "php": ">=5.2.0"
+        "php": ">=7.1.0"
     },
     "require-dev": {
-        "phpunit/phpunit": "4.3.5"
+        "phpunit/phpunit": "^7"
     },
     "bin": ["mp"]
 }

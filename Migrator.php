@@ -610,7 +610,10 @@ MSG;
             $this->logMessage("No migrations available.\n");
             return true;
         }
-        $lastMigration = array_pop(array_keys($this->migrationList));
+
+        $migrationListKeys = array_keys($this->migrationList);
+        $lastMigration = array_pop($migrationListKeys);
+
         return $lastMigration;
     }
 
@@ -820,7 +823,7 @@ END;
         {
             $toVersion = $this->findNextMigration($currentVersion, Migrator::DIRECTION_UP);
         }
-        else if ($toVersion === Migrator::VERSION_DOWN)
+        elseif ($toVersion === Migrator::VERSION_DOWN)
         {
             $toVersion = $this->findNextMigration($currentVersion, Migrator::DIRECTION_DOWN);
             if (!$toVersion)
@@ -828,7 +831,7 @@ END;
                 $toVersion = Migrator::VERSION_ZERO;
             }
         }
-        else if ($toVersion === Migrator::VERSION_HEAD)
+        elseif ($toVersion === Migrator::VERSION_HEAD)
         {
             $toVersion = $this->latestVersion();
             $this->logMessage("Resolved head to {$toVersion}\n", true);
@@ -866,11 +869,11 @@ END;
         {
             $direction = Migrator::DIRECTION_UP;
         }
-        else if ($currentVersion === array_pop(array_keys($this->migrationList)))
+        elseif ($currentVersion === $this->latestVersion())
         {
             $direction = Migrator::DIRECTION_DOWN;
         }
-        else if ($toVersion === Migrator::VERSION_ZERO)
+        elseif ($toVersion === Migrator::VERSION_ZERO)
         {
             $direction = Migrator::DIRECTION_DOWN;
         }
