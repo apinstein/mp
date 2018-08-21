@@ -1,7 +1,8 @@
+vendor/
 migrations/*
 test/migrations/version.txt
 *.swp
 mp-*.tgz
 package.xml
-vendor/
 composer.lock
+.php_cs.cache

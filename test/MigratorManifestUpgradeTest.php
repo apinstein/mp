@@ -1,6 +1,6 @@
 <?php
 
-require_once __DIR__ . '/../Migrator.php';
+require_once __DIR__.'/../Migrator.php';
 
 use PHPUnit\Framework\TestCase;
 
@@ -8,44 +8,45 @@ class MigratorManifestUpgradeTest extends TestCase
 {
     private function migrationsDir()
     {
-        return __DIR__ . '/migrations-without-manifest';
-    }
-    private function manifestFile()
-    {
-        return $this->migrationsDir() . '/migrations.json';
+        return __DIR__.'/migrations-without-manifest';
     }
 
-    function teardown()
+    private function manifestFile()
+    {
+        return $this->migrationsDir().'/migrations.json';
+    }
+
+    public function teardown()
     {
         @unlink($this->manifestFile());
     }
 
-    function testMPRequiresManifestFile()
+    public function testMPRequiresManifestFile()
     {
         $this->expectException('MigrationNoManifestException');
         new Migrator(array(
-            Migrator::OPT_MIGRATIONS_DIR    => $this->migrationsDir(),
-            Migrator::OPT_QUIET             => true,
+            Migrator::OPT_MIGRATIONS_DIR => $this->migrationsDir(),
+            Migrator::OPT_QUIET => true,
         ));
     }
 
-    function testMigrationUpgradeCreatesExpectedManifestFile()
+    public function testMigrationUpgradeCreatesExpectedManifestFile()
     {
-        $this->assertFalse(file_exists($this->manifestFile()), "Shouldn't be a manifest file yet.");
+        $this->assertFileNotExists($this->manifestFile(), "Shouldn't be a manifest file yet.");
 
         new Migrator(array(
-            Migrator::OPT_MIGRATIONS_DIR                => $this->migrationsDir(),
-            Migrator::OPT_QUIET                         => true,
-            Migrator::OPT_OFFER_MANIFEST_UPGRADE        => true,
+            Migrator::OPT_MIGRATIONS_DIR => $this->migrationsDir(),
+            Migrator::OPT_QUIET => true,
+            Migrator::OPT_OFFER_MANIFEST_UPGRADE => true,
         ));
 
-        $this->assertTrue(file_exists($this->manifestFile()), "Should be a manifest file now.");
+        $this->assertFileExists($this->manifestFile(), 'Should be a manifest file now.');
         $this->assertEquals(array(
-            "20090719_000001",
-            "20090719_000002",
-            "20090719_000003",
-            "20090719_000004",
-            "20090719_000005",
+            '20090719_000001',
+            '20090719_000002',
+            '20090719_000003',
+            '20090719_000004',
+            '20090719_000005',
         ), json_decode(file_get_contents($this->manifestFile())));
     }
 }
