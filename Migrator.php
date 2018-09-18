@@ -489,11 +489,26 @@ END;
                 continue;
             }
             if ($file->isDir()) {
-                continue;
-            }
-            $matches = array();
-            if (preg_match('/^([0-9]{8}_[0-9]{6}).php$/', $file->getFilename(), $matches)) {
-                $migrationFileList[$matches[1]] = $file->getFilename();
+                if (preg_match('/^([0-9]{4})$/', $file->getFilename(), $matches)) {
+                    // Year dir
+                    foreach (new DirectoryIterator($file->getPathname()) as $subFile) {
+                        if ($subFile->isDot() || $subFile->isDir()) {
+                            continue;
+                        }
+
+                        if (preg_match('/^([0-9]{8}_[0-9]{6}).php$/', $subFile->getFilename(), $matches)) {
+                            $migrationFileList[$matches[1]] = $file->getFilename().\DIRECTORY_SEPARATOR.$subFile->getFilename();
+                        }
+                    }
+                } else {
+                    // Not a year dir
+                    continue;
+                }
+            } else {
+                $matches = array();
+                if (preg_match('/^([0-9]{8}_[0-9]{6}).php$/', $file->getFilename(), $matches)) {
+                    $migrationFileList[$matches[1]] = $file->getFilename();
+                }
             }
         }
 
