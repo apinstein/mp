@@ -742,7 +742,13 @@ SQL;
     }
 }
 END;
-        $filePath = $this->getMigrationsDirectory()."/{$filename}";
+        if (is_dir($this->getMigrationsDirectory().'/'.date('Y'))) {
+            // Year dir exists
+            $filePath = $this->getMigrationsDirectory().'/'.date('Y')."/{$filename}";
+        } else {
+            $filePath = $this->getMigrationsDirectory()."/{$filename}";
+        }
+
         if (file_exists($filePath)) {
             throw new Exception("Migration {$dts} already exists! Aborting.");
         }
