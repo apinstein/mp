@@ -23,13 +23,11 @@
  * THE SOFTWARE.
  */
 
-if (strpos('@php_bin@', '@php_bin') === 0) {  // not a pear install
-  $prefix = dirname(__FILE__);
+if (file_exists($a = __DIR__.'/../../autoload.php')) {
+    require_once $a;
 } else {
-  $prefix = 'mp';
+    require_once __DIR__.'/vendor/autoload.php';
 }
-require_once "{$prefix}/Migrator.php";
-
 
 // get options
 $longopts = array();
@@ -153,6 +151,7 @@ if (!(isset($cliOpts['r']) or isset($cliOpts['n']) or isset($cliOpts['s']) or is
     $cliOpts['s'] = true;
 }
 try {
+    $opts[Migrator::OPT_OFFER_MANIFEST_UPGRADE] = true;
     $m = new Migrator($opts);
 
     if (isset($cliOpts['r']))

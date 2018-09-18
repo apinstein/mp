@@ -1,6 +1,6 @@
 <?php
 
-class Migration20090719_000002 extends Migration
+class Migration20170918_000001 extends Migration
 {
     public function up()
     {
@@ -12,6 +12,6 @@ class Migration20090719_000002 extends Migration
 
     public function description()
     {
-        return 'Version 2';
+        return '2017 Version 1';
     }
 }
